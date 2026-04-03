@@ -732,3 +732,143 @@
 
 .empty-state-icon { font-size: 40px; opacity: 0.4; }
 .empty-state p { font-size: 14px; }
+
+/* ===== TAGS ===== */
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 50px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--accent-blue-dim);
+  color: var(--accent-blue);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  white-space: nowrap;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: var(--accent-blue);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.tag-remove:hover { opacity: 1; }
+
+.tag-input-wrap { display: flex; flex-direction: column; gap: 8px; }
+
+.tag-input-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  min-height: 44px;
+  transition: var(--transition);
+}
+
+.tag-input-field:focus-within {
+  border-color: var(--glass-border-hover);
+  background: var(--glass-bg-hover);
+}
+
+.tag-text-input {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  min-width: 80px;
+  flex: 1;
+  padding: 0;
+}
+.tag-text-input::placeholder { color: var(--text-muted); }
+
+.preset-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset-tag-btn {
+  padding: 3px 10px;
+  border-radius: 50px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  font-size: 11px;
+  transition: var(--transition);
+}
+.preset-tag-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: var(--accent-blue-dim);
+}
+
+/* Textarea */
+.form-textarea {
+  resize: vertical;
+  line-height: 1.6;
+  min-height: 76px;
+}
+
+/* Entry card tags */
+.entry-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+/* Modal tags & memo */
+.modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.modal-memo {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: 12px 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+
+/* Tag filter bar (calendar) */
+.tag-filter-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-filter-btn {
+  padding: 5px 14px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  transition: var(--transition);
+}
+.tag-filter-btn:hover {
+  border-color: var(--glass-border-hover);
+  color: var(--text-secondary);
+}
+.tag-filter-btn.active {
+  background: var(--accent-blue-dim);
+  border-color: rgba(129, 140, 248, 0.3);
+  color: var(--accent-blue);
+}

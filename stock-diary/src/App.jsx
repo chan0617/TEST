@@ -1,19 +1,41 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 
-// ── Seed data (demo) ──────────────────────────────────────────────────────────
+// ── localStorage helpers ──────────────────────────────────────────────────────
+const STORAGE_KEY = 'stock-diary-entries'
+
+function loadEntries() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveEntries(entries) {
+  try {
+    // images are object URLs (session-only), strip before persisting
+    const serializable = entries.map(({ image, ...rest }) => rest)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable))
+  } catch {/* storage full – silently skip */}
+}
+
+// ── Seed data (only used when localStorage is empty) ─────────────────────────
 const SEED = [
-  { id: 1, stock: '삼성전자', rate: 3.2,  date: '2026-03-05', image: null },
-  { id: 2, stock: 'SK하이닉스', rate: -1.8, date: '2026-03-07', image: null },
-  { id: 3, stock: '카카오',   rate: 5.1,  date: '2026-03-10', image: null },
-  { id: 4, stock: 'NAVER',   rate: -0.6, date: '2026-03-12', image: null },
-  { id: 5, stock: '현대차',   rate: 2.4,  date: '2026-03-14', image: null },
-  { id: 6, stock: '삼성전자', rate: -2.1, date: '2026-03-18', image: null },
-  { id: 7, stock: 'LG에너지솔루션', rate: 7.3, date: '2026-03-21', image: null },
-  { id: 8, stock: 'SK하이닉스', rate: 4.0, date: '2026-03-25', image: null },
-  { id: 9, stock: '카카오',   rate: -3.3, date: '2026-04-01', image: null },
-  { id: 10, stock: 'NAVER',  rate: 1.9,  date: '2026-04-02', image: null },
+  { id: 1, stock: '삼성전자',      rate:  3.2, date: '2026-03-05', memo: '', tags: ['매수'] },
+  { id: 2, stock: 'SK하이닉스',    rate: -1.8, date: '2026-03-07', memo: '반도체 약세', tags: ['손절'] },
+  { id: 3, stock: '카카오',        rate:  5.1, date: '2026-03-10', memo: '', tags: ['단타'] },
+  { id: 4, stock: 'NAVER',        rate: -0.6, date: '2026-03-12', memo: '', tags: [] },
+  { id: 5, stock: '현대차',        rate:  2.4, date: '2026-03-14', memo: '실적 기대감', tags: ['스윙'] },
+  { id: 6, stock: '삼성전자',      rate: -2.1, date: '2026-03-18', memo: '', tags: ['손절'] },
+  { id: 7, stock: 'LG에너지솔루션', rate:  7.3, date: '2026-03-21', memo: '배터리 섹터 급등', tags: ['단타', '매수'] },
+  { id: 8, stock: 'SK하이닉스',    rate:  4.0, date: '2026-03-25', memo: '', tags: [] },
+  { id: 9, stock: '카카오',        rate: -3.3, date: '2026-04-01', memo: '', tags: ['손절'] },
+  { id: 10, stock: 'NAVER',       rate:  1.9, date: '2026-04-02', memo: '광고 매출 개선', tags: ['스윙'] },
 ]
+
+const PRESET_TAGS = ['매수', '손절', '단타', '스윙', '장기', '공매도', '분할매수']
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (rate) => `${rate > 0 ? '+' : ''}${rate.toFixed(1)}%`
@@ -26,6 +48,18 @@ function today() {
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr)
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })
+}
+
+// ── TagBadge ──────────────────────────────────────────────────────────────────
+function TagBadge({ tag, onRemove }) {
+  return (
+    <span className="tag-badge">
+      {tag}
+      {onRemove && (
+        <button className="tag-remove" onClick={() => onRemove(tag)}>×</button>
+      )}
+    </span>
+  )
 }
 
 // ── EntryModal ────────────────────────────────────────────────────────────────
@@ -45,8 +79,60 @@ function EntryModal({ entry, onClose }) {
             </div>
             <div className={`modal-rate ${sign(entry.rate)}`}>{fmt(entry.rate)}</div>
           </div>
+          {entry.tags?.length > 0 && (
+            <div className="modal-tags">
+              {entry.tags.map(t => <TagBadge key={t} tag={t} />)}
+            </div>
+          )}
+          {entry.memo && (
+            <div className="modal-memo">{entry.memo}</div>
+          )}
           <button className="modal-close" onClick={onClose}>닫기</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── TagInput ──────────────────────────────────────────────────────────────────
+function TagInput({ tags, onChange }) {
+  const [input, setInput] = useState('')
+
+  const addTag = (tag) => {
+    const trimmed = tag.trim()
+    if (trimmed && !tags.includes(trimmed)) {
+      onChange([...tags, trimmed])
+    }
+    setInput('')
+  }
+
+  const removeTag = (tag) => onChange(tags.filter(t => t !== tag))
+
+  const handleKey = (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      e.preventDefault()
+      addTag(input)
+    } else if (e.key === 'Backspace' && !input && tags.length) {
+      removeTag(tags[tags.length - 1])
+    }
+  }
+
+  return (
+    <div className="tag-input-wrap">
+      <div className="tag-input-field">
+        {tags.map(t => <TagBadge key={t} tag={t} onRemove={removeTag} />)}
+        <input
+          className="tag-text-input"
+          placeholder={tags.length ? '' : '태그 입력 후 Enter'}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKey}
+        />
+      </div>
+      <div className="preset-tags">
+        {PRESET_TAGS.filter(t => !tags.includes(t)).map(t => (
+          <button key={t} className="preset-tag-btn" onClick={() => addTag(t)}>{t}</button>
+        ))}
       </div>
     </div>
   )
@@ -58,6 +144,8 @@ function UploadView({ entries, onAdd }) {
   const [image, setImage] = useState(null)
   const [stock, setStock] = useState('')
   const [rate, setRate] = useState('')
+  const [memo, setMemo] = useState('')
+  const [tags, setTags] = useState([])
   const [selected, setSelected] = useState(null)
   const inputRef = useRef()
 
@@ -82,10 +170,8 @@ function UploadView({ entries, onAdd }) {
 
   const handleSubmit = () => {
     if (!canSubmit) return
-    onAdd({ stock: stock.trim(), rate: rateNum, date: today(), image })
-    setStock('')
-    setRate('')
-    setImage(null)
+    onAdd({ stock: stock.trim(), rate: rateNum, date: today(), image, memo: memo.trim(), tags })
+    setStock(''); setRate(''); setMemo(''); setTags([]); setImage(null)
   }
 
   return (
@@ -113,10 +199,11 @@ function UploadView({ entries, onAdd }) {
               <div className="drop-zone-icon">📷</div>
               <div className="drop-zone-text">
                 <h3>캡처 이미지 업로드</h3>
-                <p>클릭하거나 드래그해서 추가</p>
+                <p>클릭 · 드래그 · 갤러리에서 선택</p>
               </div>
             </>
           )}
+          {/* accept="image/*" without capture= lets mobile users choose gallery or camera */}
           <input
             ref={inputRef}
             type="file"
@@ -160,6 +247,22 @@ function UploadView({ entries, onAdd }) {
             )}
           </div>
 
+          <div className="form-group">
+            <label className="form-label">태그</label>
+            <TagInput tags={tags} onChange={setTags} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">메모</label>
+            <textarea
+              className="form-input form-textarea"
+              placeholder="거래 이유, 감상 등 자유롭게"
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              rows={3}
+            />
+          </div>
+
           <div className="date-info">
             <span>📅</span>
             <span>오늘 — {formatDateLabel(today())}</span>
@@ -192,6 +295,11 @@ function UploadView({ entries, onAdd }) {
                 }
                 <div className="entry-card-body">
                   <div className="entry-card-stock">{e.stock}</div>
+                  {e.tags?.length > 0 && (
+                    <div className="entry-card-tags">
+                      {e.tags.slice(0, 2).map(t => <TagBadge key={t} tag={t} />)}
+                    </div>
+                  )}
                   <div className="entry-card-meta">
                     <span className="entry-card-date">{e.date}</span>
                     <span className={`rate-badge ${sign(e.rate)}`}>{fmt(e.rate)}</span>
@@ -214,8 +322,9 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 function CalendarView({ entries }) {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth()) // 0-indexed
+  const [month, setMonth] = useState(now.getMonth())
   const [selected, setSelected] = useState(null)
+  const [filterTag, setFilterTag] = useState('')
 
   const prevMonth = () => {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -226,43 +335,36 @@ function CalendarView({ entries }) {
     else setMonth(m => m + 1)
   }
 
-  // Build calendar days
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const daysInPrev = new Date(year, month, 0).getDate()
 
   const cells = []
-  for (let i = firstDay - 1; i >= 0; i--) {
-    cells.push({ day: daysInPrev - i, current: false })
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ day: d, current: true })
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push({ day: cells.length - firstDay - daysInMonth + 1, current: false })
-  }
+  for (let i = firstDay - 1; i >= 0; i--) cells.push({ day: daysInPrev - i, current: false })
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, current: true })
+  while (cells.length % 7 !== 0) cells.push({ day: cells.length - firstDay - daysInMonth + 1, current: false })
 
   const todayStr = today()
   const pad = (n) => String(n).padStart(2, '0')
 
-  const entriesForDay = (d) => {
-    const dateStr = `${year}-${pad(month + 1)}-${pad(d)}`
-    return entries.filter((e) => e.date === dateStr)
-  }
-
-  // Month entries for stats & compare
   const monthEntries = entries.filter((e) => {
     const [y, m] = e.date.split('-').map(Number)
-    return y === year && m === month + 1
+    const matchMonth = y === year && m === month + 1
+    const matchTag = !filterTag || e.tags?.includes(filterTag)
+    return matchMonth && matchTag
   })
+
+  const entriesForDay = (d) => {
+    const dateStr = `${year}-${pad(month + 1)}-${pad(d)}`
+    return monthEntries.filter((e) => e.date === dateStr)
+  }
 
   const totalWins = monthEntries.filter((e) => e.rate > 0).length
   const totalLoss = monthEntries.filter((e) => e.rate < 0).length
   const avgRate = monthEntries.length
-    ? (monthEntries.reduce((s, e) => s + e.rate, 0) / monthEntries.length)
+    ? monthEntries.reduce((s, e) => s + e.rate, 0) / monthEntries.length
     : null
 
-  // Stock aggregation for compare
   const stockMap = {}
   monthEntries.forEach(({ stock, rate }) => {
     if (!stockMap[stock]) stockMap[stock] = { total: 0, count: 0 }
@@ -273,17 +375,15 @@ function CalendarView({ entries }) {
     .map(([name, { total, count }]) => ({ name, avg: total / count }))
     .sort((a, b) => b.avg - a.avg)
 
-  const maxAbs = stockStats.length
-    ? Math.max(...stockStats.map((s) => Math.abs(s.avg)))
-    : 1
+  const maxAbs = stockStats.length ? Math.max(...stockStats.map((s) => Math.abs(s.avg))) : 1
 
-  const monthLabel = new Date(year, month).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long',
-  })
+  // All tags present in this month
+  const monthTags = [...new Set(monthEntries.flatMap(e => e.tags ?? []))]
+
+  const monthLabel = new Date(year, month).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
 
   return (
     <div className="calendar-view">
-      {/* Controls */}
       <div className="calendar-controls">
         <div className="calendar-nav">
           <button className="cal-nav-btn" onClick={prevMonth}>‹</button>
@@ -293,7 +393,7 @@ function CalendarView({ entries }) {
         <div className="cal-summary">
           <div className="cal-stat">
             <span className="cal-stat-label">기록</span>
-            <span className={`cal-stat-value neutral`}>{monthEntries.length}건</span>
+            <span className="cal-stat-value neutral">{monthEntries.length}건</span>
           </div>
           <div className="cal-stat">
             <span className="cal-stat-label">승 / 패</span>
@@ -312,31 +412,41 @@ function CalendarView({ entries }) {
         </div>
       </div>
 
-      {/* Grid */}
+      {/* Tag filter */}
+      {monthTags.length > 0 && (
+        <div className="tag-filter-wrap">
+          <button
+            className={`tag-filter-btn ${!filterTag ? 'active' : ''}`}
+            onClick={() => setFilterTag('')}
+          >
+            전체
+          </button>
+          {monthTags.map(t => (
+            <button
+              key={t}
+              className={`tag-filter-btn ${filterTag === t ? 'active' : ''}`}
+              onClick={() => setFilterTag(t === filterTag ? '' : t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="calendar-grid-wrap">
         <div className="calendar-weekdays">
-          {WEEKDAYS.map((d) => (
-            <div key={d} className="weekday-header">{d}</div>
-          ))}
+          {WEEKDAYS.map((d) => <div key={d} className="weekday-header">{d}</div>)}
         </div>
         <div className="calendar-days">
           {cells.map((cell, idx) => {
-            const isToday = cell.current &&
-              `${year}-${pad(month + 1)}-${pad(cell.day)}` === todayStr
+            const isToday = cell.current && `${year}-${pad(month + 1)}-${pad(cell.day)}` === todayStr
             const dayEntries = cell.current ? entriesForDay(cell.day) : []
             return (
-              <div
-                key={idx}
-                className={`cal-day ${!cell.current ? 'other-month' : ''} ${isToday ? 'today' : ''}`}
-              >
+              <div key={idx} className={`cal-day ${!cell.current ? 'other-month' : ''} ${isToday ? 'today' : ''}`}>
                 <span className="day-num">{cell.day}</span>
                 <div className="day-entries">
                   {dayEntries.map((e) => (
-                    <div
-                      key={e.id}
-                      className={`day-entry-chip ${sign(e.rate)}`}
-                      onClick={() => setSelected(e)}
-                    >
+                    <div key={e.id} className={`day-entry-chip ${sign(e.rate)}`} onClick={() => setSelected(e)}>
                       <span className="chip-stock">{e.stock}</span>
                       <span className={`chip-rate ${sign(e.rate)}`}>{fmt(e.rate)}</span>
                     </div>
@@ -348,22 +458,18 @@ function CalendarView({ entries }) {
         </div>
       </div>
 
-      {/* Stock Compare */}
       {stockStats.length > 0 && (
         <div className="stock-compare">
           <div className="stock-compare-title">종목별 평균 수익률</div>
           <div className="stock-bars">
             {stockStats.map(({ name, avg }) => {
-              const pct = (Math.abs(avg) / maxAbs) * 46  // max 46% of half track
+              const pct = (Math.abs(avg) / maxAbs) * 46
               return (
                 <div key={name} className="stock-bar-row">
                   <span className="stock-bar-label">{name}</span>
                   <div className="stock-bar-track">
                     <div className="zero-line" />
-                    <div
-                      className={`stock-bar-fill ${sign(avg)}`}
-                      style={{ width: `${pct}%` }}
-                    />
+                    <div className={`stock-bar-fill ${sign(avg)}`} style={{ width: `${pct}%` }} />
                   </div>
                   <span className={`stock-bar-value ${sign(avg)}`}>{fmt(avg)}</span>
                 </div>
@@ -376,7 +482,7 @@ function CalendarView({ entries }) {
       {monthEntries.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">📅</div>
-          <p>이 달의 거래 기록이 없습니다</p>
+          <p>{filterTag ? `'${filterTag}' 태그 기록이 없습니다` : '이 달의 거래 기록이 없습니다'}</p>
         </div>
       )}
 
@@ -388,8 +494,12 @@ function CalendarView({ entries }) {
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState('upload')
-  const [entries, setEntries] = useState(SEED)
-  const nextId = useRef(SEED.length + 1)
+  const [entries, setEntries] = useState(() => loadEntries() ?? SEED)
+  const nextId = useRef((loadEntries() ?? SEED).reduce((max, e) => Math.max(max, e.id), 0) + 1)
+
+  useEffect(() => {
+    saveEntries(entries)
+  }, [entries])
 
   const addEntry = (entry) => {
     setEntries((prev) => [...prev, { ...entry, id: nextId.current++ }])
@@ -403,16 +513,10 @@ export default function App() {
           <span className="header-name">매매 일기</span>
         </div>
         <nav className="header-nav">
-          <button
-            className={`nav-btn ${tab === 'upload' ? 'active' : ''}`}
-            onClick={() => setTab('upload')}
-          >
+          <button className={`nav-btn ${tab === 'upload' ? 'active' : ''}`} onClick={() => setTab('upload')}>
             기록하기
           </button>
-          <button
-            className={`nav-btn ${tab === 'calendar' ? 'active' : ''}`}
-            onClick={() => setTab('calendar')}
-          >
+          <button className={`nav-btn ${tab === 'calendar' ? 'active' : ''}`} onClick={() => setTab('calendar')}>
             달력 보기
           </button>
         </nav>
