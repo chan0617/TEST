@@ -3,383 +3,795 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>이미지 크롭 도구</title>
+  <title>스마트 일괄 크롭</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #e94560;
+      --blue: #0f3460;
+      --dark: #1a1a2e;
+      --mid: #16213e;
+      --green: #16a085;
+    }
 
     body {
       font-family: 'Segoe UI', sans-serif;
-      background: #1a1a2e;
+      background: var(--dark);
       color: #eee;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 32px 16px;
+      padding: 32px 16px 60px;
+      gap: 24px;
     }
 
     h1 {
-      font-size: 2rem;
-      margin-bottom: 8px;
-      background: linear-gradient(90deg, #e94560, #0f3460);
+      font-size: 1.9rem;
+      background: linear-gradient(90deg, var(--red), var(--blue));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    p.subtitle {
-      color: #aaa;
-      margin-bottom: 32px;
-      font-size: 0.95rem;
+    .sub { color: #888; font-size: 0.88rem; text-align: center; }
+
+    /* Model loader overlay */
+    #model-overlay {
+      position: fixed; inset: 0;
+      background: rgba(26,26,46,0.92);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; z-index: 1000;
     }
 
-    #drop-zone {
-      width: 100%;
-      max-width: 700px;
-      border: 2px dashed #e94560;
+    #model-overlay p { color: #ccc; font-size: 0.95rem; }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #333;
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Upload */
+    .drop-zone {
+      width: 100%; max-width: 960px;
+      border: 2px dashed var(--red);
       border-radius: 16px;
-      padding: 48px 24px;
+      padding: 36px 24px;
       text-align: center;
       cursor: pointer;
+      background: var(--mid);
       transition: background 0.2s;
-      background: #16213e;
     }
 
-    #drop-zone:hover, #drop-zone.drag-over {
-      background: #0f3460;
+    .drop-zone:hover, .drop-zone.drag-over { background: var(--blue); }
+    .drop-zone .icon { font-size: 2.4rem; }
+    .drop-zone p { color: #bbb; margin-top: 10px; font-size: 0.9rem; }
+    .drop-zone input { display: none; }
+
+    /* Queue */
+    #queue-section {
+      width: 100%; max-width: 960px;
+      display: none; flex-direction: column; gap: 14px;
     }
 
-    #drop-zone p { color: #ccc; margin-top: 12px; }
-
-    #drop-zone input { display: none; }
-
-    .icon { font-size: 3rem; }
-
-    #workspace {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      max-width: 900px;
-      margin-top: 32px;
-      gap: 20px;
-    }
-
-    #canvas-container {
-      position: relative;
-      display: inline-block;
-      cursor: crosshair;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-    }
-
-    #canvas-container canvas { display: block; }
-
-    #selection {
-      position: absolute;
-      border: 2px solid #e94560;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
-      pointer-events: none;
-    }
-
-    .controls {
-      display: flex;
+    #queue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
+    }
+
+    .q-card {
+      background: var(--mid);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid var(--blue);
+      cursor: pointer;
+      transition: border-color 0.15s;
+      position: relative;
+    }
+
+    .q-card:hover { border-color: var(--red); }
+    .q-card.selected { border-color: var(--green); }
+
+    .q-card img {
+      width: 100%; height: 100px;
+      object-fit: cover; display: block;
+    }
+
+    .q-card-info {
+      padding: 6px 8px;
+      font-size: 0.7rem;
+      color: #aaa;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+
+    .q-badge {
+      position: absolute; top: 6px; left: 6px;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-size: 0.65rem; font-weight: 700;
+      color: #fff;
+    }
+
+    .q-badge.detecting { background: #e67e22; }
+    .q-badge.detected  { background: var(--green); }
+    .q-badge.manual    { background: var(--blue); }
+    .q-badge.done      { background: #27ae60; }
+    .q-badge.error     { background: #c0392b; }
+
+    .q-remove {
+      position: absolute; top: 4px; right: 4px;
+      width: 22px; height: 22px;
+      background: var(--red); border: none; border-radius: 50%;
+      color: #fff; font-size: 0.75rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Action bar */
+    .action-bar {
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+      width: 100%; max-width: 960px;
     }
 
     button {
-      padding: 10px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      cursor: pointer;
-      font-weight: 600;
-      transition: opacity 0.15s;
+      padding: 10px 22px;
+      border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
     }
 
     button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-    #btn-crop { background: #e94560; color: #fff; }
-    #btn-reset { background: #0f3460; color: #fff; }
-    #btn-download { background: #16a085; color: #fff; display: none; }
-    #btn-new { background: #555; color: #fff; }
+    .btn-red   { background: var(--red);   color: #fff; }
+    .btn-blue  { background: var(--blue);  color: #fff; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-gray  { background: #444;         color: #fff; }
 
-    #result-section {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
+    #progress-bar-wrap {
+      width: 100%; max-width: 960px;
+      background: #333; border-radius: 8px; overflow: hidden;
+      display: none; height: 8px;
     }
 
-    #result-section h2 { font-size: 1.2rem; color: #e94560; }
-
-    #result-canvas {
-      border-radius: 8px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-      max-width: 100%;
+    #progress-bar {
+      height: 100%; background: var(--green);
+      transition: width 0.2s; width: 0%;
     }
 
-    .info {
-      font-size: 0.85rem;
-      color: #888;
+    /* Results */
+    #results-section {
+      width: 100%; max-width: 960px;
+      display: none; flex-direction: column; gap: 16px;
     }
 
-    .ratio-presets {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: center;
+    #result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
     }
 
-    .ratio-btn {
-      padding: 6px 14px;
-      background: #0f3460;
-      color: #ccc;
+    .result-card {
+      background: var(--mid); border-radius: 10px; overflow: hidden;
+      border: 2px solid var(--blue);
+    }
+
+    .result-card img {
+      width: 100%; height: 100px; object-fit: cover; display: block;
+    }
+
+    .result-card-info {
+      padding: 6px 8px; font-size: 0.68rem; color: #aaa;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+
+    .result-card-info a {
+      color: var(--green); text-decoration: none; font-size: 0.7rem;
+    }
+
+    .result-card-info a:hover { text-decoration: underline; }
+
+    /* Modal */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 500; gap: 12px; padding: 16px;
+    }
+
+    #modal-overlay.open { display: flex; }
+
+    #modal-title {
+      color: #fff; font-size: 0.95rem; font-weight: 700;
+      max-width: 860px; width: 100%;
+    }
+
+    #editor-canvas {
+      cursor: crosshair;
       border-radius: 6px;
-      font-size: 0.82rem;
-      font-weight: 500;
+      max-width: 100%;
+      touch-action: none;
     }
 
-    .ratio-btn.active {
-      background: #e94560;
-      color: #fff;
+    #modal-info { color: #aaa; font-size: 0.8rem; }
+
+    .modal-btns { display: flex; gap: 10px; }
+
+    .divider {
+      width: 100%; max-width: 960px;
+      border: none; border-top: 1px solid #2a2a4a;
     }
+
+    .section-title {
+      width: 100%; max-width: 960px;
+      font-size: 0.82rem; font-weight: 700;
+      color: #888; text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    #ai-status {
+      font-size: 0.78rem; color: #666;
+      width: 100%; max-width: 960px; text-align: right;
+    }
+
+    #ai-status.ready { color: var(--green); }
   </style>
 </head>
 <body>
 
-<h1>✂️ 이미지 크롭 도구</h1>
-<p class="subtitle">이미지를 업로드하고 원하는 영역을 선택해 잘라내세요.</p>
-
-<div id="drop-zone">
-  <div class="icon">🖼️</div>
-  <p><strong>클릭</strong>하거나 이미지를 여기에 <strong>드래그</strong>하세요</p>
-  <p style="font-size:0.8rem; margin-top:6px;">JPG, PNG, WebP, GIF 지원</p>
-  <input type="file" id="file-input" accept="image/*" />
+<!-- Model loading overlay -->
+<div id="model-overlay">
+  <div class="spinner"></div>
+  <p>AI 객체 인식 모델 로딩 중...</p>
+  <p style="font-size:0.78rem;color:#555;">처음 로딩은 10~20초 걸릴 수 있어요</p>
 </div>
 
-<div id="workspace">
-  <p class="info" id="img-info"></p>
+<!-- Crop editor modal -->
+<div id="modal-overlay">
+  <div id="modal-title">크롭 영역 조정</div>
+  <canvas id="editor-canvas"></canvas>
+  <div id="modal-info">-</div>
+  <div class="modal-btns">
+    <button class="btn-green" id="btn-modal-confirm">확인</button>
+    <button class="btn-gray"  id="btn-modal-cancel">취소</button>
+  </div>
+</div>
 
-  <div class="ratio-presets">
-    <button class="ratio-btn active" data-ratio="free">자유 선택</button>
-    <button class="ratio-btn" data-ratio="1:1">1 : 1</button>
-    <button class="ratio-btn" data-ratio="4:3">4 : 3</button>
-    <button class="ratio-btn" data-ratio="16:9">16 : 9</button>
-    <button class="ratio-btn" data-ratio="3:4">3 : 4</button>
-    <button class="ratio-btn" data-ratio="9:16">9 : 16</button>
+<h1>✂️ 스마트 일괄 크롭</h1>
+<p class="sub">AI가 객체를 자동 인식해 크롭 영역을 설정합니다. 카드 클릭으로 수동 조정도 가능해요.</p>
+
+<div id="ai-status">AI 모델 준비 중...</div>
+
+<div class="drop-zone" id="drop-zone">
+  <div class="icon">🖼️</div>
+  <p><strong>클릭</strong>하거나 이미지를 드래그하세요 <strong>(여러 장 가능)</strong></p>
+  <p>JPG · PNG · WebP 지원</p>
+  <input type="file" id="file-input" accept="image/*" multiple />
+</div>
+
+<!-- Queue -->
+<div id="queue-section">
+  <div class="section-title">등록된 이미지 — 카드 클릭으로 크롭 영역 조정</div>
+  <div id="queue-grid"></div>
+
+  <div class="action-bar">
+    <button class="btn-red"  id="btn-crop-all">✂️ 전체 크롭</button>
+    <button class="btn-blue" id="btn-add-more">+ 이미지 추가</button>
+    <button class="btn-gray" id="btn-clear-queue">전체 삭제</button>
+    <input type="file" id="add-more-input" accept="image/*" multiple style="display:none" />
   </div>
 
-  <div id="canvas-container">
-    <canvas id="main-canvas"></canvas>
-    <div id="selection" style="display:none;"></div>
-  </div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+</div>
 
-  <div class="controls">
-    <button id="btn-crop">✂️ 크롭</button>
-    <button id="btn-reset">↺ 선택 초기화</button>
-    <button id="btn-new">📂 새 이미지</button>
-  </div>
+<!-- Results -->
+<hr class="divider" id="result-divider" style="display:none" />
 
-  <div id="result-section">
-    <h2>크롭 결과</h2>
-    <canvas id="result-canvas"></canvas>
-    <p class="info" id="result-info"></p>
-    <button id="btn-download">⬇️ 다운로드</button>
+<div id="results-section">
+  <div class="section-title">크롭 결과</div>
+  <div class="action-bar">
+    <button class="btn-green" id="btn-zip">⬇️ 전체 ZIP 다운로드</button>
   </div>
+  <div id="result-grid"></div>
 </div>
 
 <script>
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('file-input');
-  const workspace = document.getElementById('workspace');
-  const mainCanvas = document.getElementById('main-canvas');
-  const ctx = mainCanvas.getContext('2d');
-  const selDiv = document.getElementById('selection');
-  const resultSection = document.getElementById('result-section');
-  const resultCanvas = document.getElementById('result-canvas');
-  const rCtx = resultCanvas.getContext('2d');
-  const imgInfo = document.getElementById('img-info');
-  const resultInfo = document.getElementById('result-info');
-  const btnDownload = document.getElementById('btn-download');
+// ── State ──────────────────────────────────────────────────────
+let model = null;
+let queue = []; // { id, file, url, img, cropRect, status }
+let nextId = 0;
+let editorTarget = null; // item being edited
+let editor = null;
 
-  let img = null;
-  let scale = 1;
-  let sel = { x: 0, y: 0, w: 0, h: 0 };
-  let dragging = false;
-  let startX, startY;
-  let currentRatio = 'free';
+const STATUSES = { detecting:'detecting', detected:'detected', manual:'manual', done:'done', error:'error' };
 
-  // File open
-  dropZone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    loadFile(e.dataTransfer.files[0]);
-  });
+// ── DOM refs ───────────────────────────────────────────────────
+const modelOverlay  = document.getElementById('model-overlay');
+const aiStatus      = document.getElementById('ai-status');
+const dropZone      = document.getElementById('drop-zone');
+const fileInput     = document.getElementById('file-input');
+const queueSection  = document.getElementById('queue-section');
+const queueGrid     = document.getElementById('queue-grid');
+const btnCropAll    = document.getElementById('btn-crop-all');
+const btnAddMore    = document.getElementById('btn-add-more');
+const addMoreInput  = document.getElementById('add-more-input');
+const btnClearQueue = document.getElementById('btn-clear-queue');
+const progressWrap  = document.getElementById('progress-bar-wrap');
+const progressBar   = document.getElementById('progress-bar');
+const resultsSection= document.getElementById('results-section');
+const resultDivider = document.getElementById('result-divider');
+const resultGrid    = document.getElementById('result-grid');
+const btnZip        = document.getElementById('btn-zip');
+const modalOverlay  = document.getElementById('modal-overlay');
+const editorCanvas  = document.getElementById('editor-canvas');
+const modalInfo     = document.getElementById('modal-info');
+const btnModalConfirm = document.getElementById('btn-modal-confirm');
+const btnModalCancel  = document.getElementById('btn-modal-cancel');
 
-  function loadFile(file) {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const image = new Image();
-      image.onload = () => {
-        img = image;
-        setupCanvas();
-        workspace.style.display = 'flex';
-        dropZone.style.display = 'none';
-        resultSection.style.display = 'none';
-        btnDownload.style.display = 'none';
-        clearSelection();
-      };
-      image.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
+// ── Model load ─────────────────────────────────────────────────
+(async () => {
+  try {
+    model = await cocoSsd.load();
+    modelOverlay.style.display = 'none';
+    aiStatus.textContent = 'AI 모델 준비 완료';
+    aiStatus.classList.add('ready');
+  } catch(e) {
+    modelOverlay.style.display = 'none';
+    aiStatus.textContent = 'AI 모델 로드 실패 — 수동 크롭만 사용 가능';
   }
+})();
 
-  function setupCanvas() {
-    const maxW = Math.min(window.innerWidth - 40, 860);
-    const maxH = window.innerHeight * 0.6;
-    scale = Math.min(maxW / img.width, maxH / img.height, 1);
-    mainCanvas.width = Math.round(img.width * scale);
-    mainCanvas.height = Math.round(img.height * scale);
-    ctx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
-    imgInfo.textContent = `원본 크기: ${img.width} × ${img.height}px`;
-  }
+// ── Upload ─────────────────────────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
+bindDrop(dropZone, files => addFiles(files));
 
-  function clearSelection() {
-    sel = { x: 0, y: 0, w: 0, h: 0 };
-    selDiv.style.display = 'none';
-  }
+btnAddMore.addEventListener('click', () => addMoreInput.click());
+addMoreInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
 
-  // Ratio presets
-  document.querySelectorAll('.ratio-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentRatio = btn.dataset.ratio;
-      clearSelection();
-    });
-  });
+function addFiles(files) {
+  const imgs = files.filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) return;
+  imgs.forEach(f => enqueue(f));
+  dropZone.style.display = 'none';
+  queueSection.style.display = 'flex';
+  btnCropAll.disabled = false;
+}
 
-  // Mouse draw selection
-  mainCanvas.addEventListener('mousedown', e => {
-    const r = mainCanvas.getBoundingClientRect();
-    startX = e.clientX - r.left;
-    startY = e.clientY - r.top;
-    dragging = true;
-    clearSelection();
-    resultSection.style.display = 'none';
-    btnDownload.style.display = 'none';
-  });
+function enqueue(file) {
+  const id = nextId++;
+  const url = URL.createObjectURL(file);
+  const item = { id, file, url, img: null, cropRect: null, status: STATUSES.detecting };
+  queue.push(item);
+  renderCard(item);
 
-  mainCanvas.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    const r = mainCanvas.getBoundingClientRect();
-    let x = e.clientX - r.left;
-    let y = e.clientY - r.top;
-    updateSelection(x, y);
-  });
+  const img = new Image();
+  img.onload = async () => {
+    item.img = img;
+    item.cropRect = await autoDetect(img);
+    item.status = model ? STATUSES.detected : STATUSES.manual;
+    updateCard(item);
+  };
+  img.src = url;
+}
 
-  mainCanvas.addEventListener('mouseup', () => { dragging = false; });
-
-  // Touch support
-  mainCanvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const r = mainCanvas.getBoundingClientRect();
-    const t = e.touches[0];
-    startX = t.clientX - r.left;
-    startY = t.clientY - r.top;
-    dragging = true;
-    clearSelection();
-  }, { passive: false });
-
-  mainCanvas.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (!dragging) return;
-    const r = mainCanvas.getBoundingClientRect();
-    const t = e.touches[0];
-    updateSelection(t.clientX - r.left, t.clientY - r.top);
-  }, { passive: false });
-
-  mainCanvas.addEventListener('touchend', () => { dragging = false; });
-
-  function updateSelection(x, y) {
-    let dx = x - startX;
-    let dy = y - startY;
-
-    if (currentRatio !== 'free') {
-      const [rw, rh] = currentRatio.split(':').map(Number);
-      const ratio = rw / rh;
-      if (Math.abs(dx) / ratio > Math.abs(dy)) {
-        dy = (dx / ratio) * Math.sign(dy || 1);
-      } else {
-        dx = dy * ratio * Math.sign(dx || 1);
+// ── Auto detect ────────────────────────────────────────────────
+async function autoDetect(img) {
+  if (model) {
+    try {
+      const preds = await model.detect(img);
+      if (preds.length) {
+        const best = preds.reduce((a,b) => a.score > b.score ? a : b);
+        const [bx, by, bw, bh] = best.bbox;
+        const pad = Math.min(bw, bh) * 0.12;
+        return clampRect({
+          x: bx - pad, y: by - pad,
+          w: bw + pad*2, h: bh + pad*2,
+        }, img.width, img.height);
       }
+    } catch(e) {}
+  }
+  return centerRect(img.width, img.height);
+}
+
+function centerRect(iw, ih) {
+  const p = 0.08;
+  return { x: iw*p, y: ih*p, w: iw*(1-p*2), h: ih*(1-p*2) };
+}
+
+function clampRect(r, iw, ih) {
+  const x = Math.max(0, r.x);
+  const y = Math.max(0, r.y);
+  const w = Math.min(r.w, iw - x);
+  const h = Math.min(r.h, ih - y);
+  return { x, y, w, h };
+}
+
+// ── Card rendering ─────────────────────────────────────────────
+function renderCard(item) {
+  const card = document.createElement('div');
+  card.className = 'q-card';
+  card.dataset.id = item.id;
+
+  const img = document.createElement('img');
+  img.src = item.url;
+
+  const info = document.createElement('div');
+  info.className = 'q-card-info';
+  info.textContent = item.file.name;
+
+  const badge = document.createElement('div');
+  badge.className = `q-badge ${item.status}`;
+  badge.textContent = badgeLabel(item.status);
+
+  const rm = document.createElement('button');
+  rm.className = 'q-remove';
+  rm.textContent = '×';
+  rm.addEventListener('click', e => { e.stopPropagation(); removeItem(item.id); });
+
+  card.appendChild(img);
+  card.appendChild(badge);
+  card.appendChild(rm);
+  card.appendChild(info);
+  card.addEventListener('click', () => openEditor(item.id));
+
+  queueGrid.appendChild(card);
+}
+
+function updateCard(item) {
+  const card = queueGrid.querySelector(`[data-id="${item.id}"]`);
+  if (!card) return;
+  const badge = card.querySelector('.q-badge');
+  badge.className = `q-badge ${item.status}`;
+  badge.textContent = badgeLabel(item.status);
+}
+
+function badgeLabel(s) {
+  return { detecting:'인식 중', detected:'자동감지', manual:'수동', done:'완료', error:'오류' }[s] || s;
+}
+
+function removeItem(id) {
+  queue = queue.filter(it => it.id !== id);
+  const card = queueGrid.querySelector(`[data-id="${id}"]`);
+  if (card) card.remove();
+  if (queue.length === 0) {
+    queueSection.style.display = 'none';
+    dropZone.style.display = 'block';
+  }
+}
+
+btnClearQueue.addEventListener('click', () => {
+  queue = [];
+  queueGrid.innerHTML = '';
+  queueSection.style.display = 'none';
+  dropZone.style.display = 'block';
+  resultsSection.style.display = 'none';
+  resultDivider.style.display = 'none';
+  resultGrid.innerHTML = '';
+});
+
+// ── Crop editor modal ──────────────────────────────────────────
+function openEditor(id) {
+  const item = queue.find(it => it.id === id);
+  if (!item || !item.img) return;
+  editorTarget = item;
+  editor = new CropEditor(editorCanvas, item.img, item.cropRect || centerRect(item.img.width, item.img.height));
+  document.getElementById('modal-title').textContent = `크롭 영역 조정 — ${item.file.name}`;
+  updateModalInfo();
+  modalOverlay.classList.add('open');
+}
+
+function updateModalInfo() {
+  if (!editor) return;
+  const r = editor.getResult();
+  modalInfo.textContent = `크롭 크기: ${Math.round(r.w)} × ${Math.round(r.h)}px`;
+}
+
+btnModalConfirm.addEventListener('click', () => {
+  if (editorTarget && editor) {
+    editorTarget.cropRect = editor.getResult();
+    editorTarget.status = STATUSES.manual;
+    updateCard(editorTarget);
+  }
+  closeModal();
+});
+
+btnModalCancel.addEventListener('click', closeModal);
+
+modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeModal(); });
+
+function closeModal() {
+  modalOverlay.classList.remove('open');
+  editorTarget = null;
+  editor = null;
+}
+
+// ── Batch crop ─────────────────────────────────────────────────
+btnCropAll.addEventListener('click', async () => {
+  const active = queue.filter(it => it.img && it.cropRect);
+  if (!active.length) return;
+
+  btnCropAll.disabled = true;
+  btnCropAll.textContent = '크롭 중...';
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  resultGrid.innerHTML = '';
+
+  const blobs = [];
+  for (let i = 0; i < active.length; i++) {
+    const item = active[i];
+    try {
+      const blob = await cropToBlob(item.img, item.cropRect);
+      const name = 'cropped_' + item.file.name.replace(/\.[^.]+$/, '') + '.png';
+      blobs.push({ name, blob });
+      item.status = STATUSES.done;
+      updateCard(item);
+      addResultCard(name, blob);
+    } catch(e) {
+      item.status = STATUSES.error;
+      updateCard(item);
+    }
+    progressBar.style.width = `${Math.round((i+1)/active.length*100)}%`;
+  }
+
+  btnCropAll.disabled = false;
+  btnCropAll.textContent = '✂️ 전체 크롭';
+
+  if (blobs.length) {
+    resultsSection.style.display = 'flex';
+    resultDivider.style.display = 'block';
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
+    btnZip._blobs = blobs;
+  }
+});
+
+function cropToBlob(img, rect) {
+  return new Promise((resolve, reject) => {
+    const c = document.createElement('canvas');
+    const r = clampRect(rect, img.width, img.height);
+    c.width  = Math.round(r.w);
+    c.height = Math.round(r.h);
+    c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+    c.toBlob(blob => blob ? resolve(blob) : reject(), 'image/png');
+  });
+}
+
+function addResultCard(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const card = document.createElement('div');
+  card.className = 'result-card';
+
+  const img = document.createElement('img');
+  img.src = url;
+
+  const info = document.createElement('div');
+  info.className = 'result-card-info';
+
+  const fn = document.createElement('span');
+  fn.textContent = name;
+  fn.style.overflow = 'hidden'; fn.style.textOverflow = 'ellipsis'; fn.style.whiteSpace = 'nowrap';
+
+  const dl = document.createElement('a');
+  dl.href = url; dl.download = name; dl.textContent = '개별 다운로드';
+
+  info.appendChild(fn); info.appendChild(dl);
+  card.appendChild(img); card.appendChild(info);
+  resultGrid.appendChild(card);
+}
+
+// ── ZIP download ───────────────────────────────────────────────
+btnZip.addEventListener('click', async () => {
+  const blobs = btnZip._blobs;
+  if (!blobs || !blobs.length) return;
+  btnZip.disabled = true;
+  btnZip.textContent = 'ZIP 생성 중...';
+  const zip = new JSZip();
+  blobs.forEach(({ name, blob }) => zip.file(name, blob));
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = 'cropped_images.zip';
+  a.click();
+  btnZip.textContent = '⬇️ 전체 ZIP 다운로드';
+  btnZip.disabled = false;
+});
+
+// ── Drag & drop helper ─────────────────────────────────────────
+function bindDrop(zone, cb) {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    cb(Array.from(e.dataTransfer.files));
+  });
+}
+
+// ── CropEditor class ───────────────────────────────────────────
+class CropEditor {
+  constructor(canvas, img, rect) {
+    this.c = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.img = img;
+    this.HS = 7; // handle half-size
+
+    const maxW = Math.min(window.innerWidth - 48, 860);
+    const maxH = window.innerHeight * 0.68;
+    this.sc = Math.min(maxW / img.width, maxH / img.height, 1);
+
+    this.c.width  = Math.round(img.width  * this.sc);
+    this.c.height = Math.round(img.height * this.sc);
+
+    this.r = {
+      x: rect.x * this.sc,
+      y: rect.y * this.sc,
+      w: rect.w * this.sc,
+      h: rect.h * this.sc,
+    };
+
+    this.mode = null; // null | 'move' | 0-7
+    this.ox = 0; this.oy = 0;
+    this.r0 = null;
+
+    this._down  = this._onDown.bind(this);
+    this._move  = this._onMove.bind(this);
+    this._up    = this._onUp.bind(this);
+
+    this.c.addEventListener('mousedown',  this._down);
+    window.addEventListener('mousemove',  this._move);
+    window.addEventListener('mouseup',    this._up);
+    this.c.addEventListener('touchstart', this._down, { passive: false });
+    window.addEventListener('touchmove',  this._move, { passive: false });
+    window.addEventListener('touchend',   this._up);
+
+    this.draw();
+  }
+
+  _pt(e) {
+    const r = this.c.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+
+  handles() {
+    const { x, y, w, h } = this.r, hs = this.HS;
+    return [
+      { x: x-hs,     y: y-hs     }, // 0 TL
+      { x: x+w/2-hs, y: y-hs     }, // 1 T
+      { x: x+w-hs,   y: y-hs     }, // 2 TR
+      { x: x+w-hs,   y: y+h/2-hs }, // 3 R
+      { x: x+w-hs,   y: y+h-hs   }, // 4 BR
+      { x: x+w/2-hs, y: y+h-hs   }, // 5 B
+      { x: x-hs,     y: y+h-hs   }, // 6 BL
+      { x: x-hs,     y: y+h/2-hs }, // 7 L
+    ];
+  }
+
+  hitHandle(mx, my) {
+    const hs = this.HS * 2;
+    return this.handles().findIndex(h => mx >= h.x && mx <= h.x+hs && my >= h.y && my <= h.y+hs);
+  }
+
+  inRect(mx, my) {
+    const { x, y, w, h } = this.r;
+    return mx >= x && mx <= x+w && my >= y && my <= y+h;
+  }
+
+  _onDown(e) {
+    if (e.touches) e.preventDefault();
+    const { x, y } = this._pt(e);
+    this.ox = x; this.oy = y;
+    this.r0 = { ...this.r };
+    const hi = this.hitHandle(x, y);
+    this.mode = hi !== -1 ? hi : this.inRect(x, y) ? 'move' : null;
+  }
+
+  _onMove(e) {
+    if (!this.mode && this.mode !== 0) return;
+    if (e.touches) e.preventDefault();
+    const { x, y } = this._pt(e);
+    const dx = x - this.ox, dy = y - this.oy;
+    const cw = this.c.width, ch = this.c.height;
+    let { x: rx, y: ry, w: rw, h: rh } = this.r0;
+
+    if (this.mode === 'move') {
+      rx = Math.max(0, Math.min(rx + dx, cw - rw));
+      ry = Math.max(0, Math.min(ry + dy, ch - rh));
+    } else {
+      switch (this.mode) {
+        case 0: rx+=dx; ry+=dy; rw-=dx; rh-=dy; break;
+        case 1: ry+=dy; rh-=dy; break;
+        case 2: ry+=dy; rw+=dx; rh-=dy; break;
+        case 3: rw+=dx; break;
+        case 4: rw+=dx; rh+=dy; break;
+        case 5: rh+=dy; break;
+        case 6: rx+=dx; rw-=dx; rh+=dy; break;
+        case 7: rx+=dx; rw-=dx; break;
+      }
+      const MIN = 20;
+      if (rw < MIN) { if ([0,6,7].includes(this.mode)) rx = this.r0.x + this.r0.w - MIN; rw = MIN; }
+      if (rh < MIN) { if ([0,1,2].includes(this.mode)) ry = this.r0.y + this.r0.h - MIN; rh = MIN; }
+      rx = Math.max(0, rx); ry = Math.max(0, ry);
+      rw = Math.min(rw, cw - rx); rh = Math.min(rh, ch - ry);
     }
 
-    sel.x = dx >= 0 ? startX : startX + dx;
-    sel.y = dy >= 0 ? startY : startY + dy;
-    sel.w = Math.abs(dx);
-    sel.h = Math.abs(dy);
-
-    // Clamp to canvas
-    sel.x = Math.max(0, Math.min(sel.x, mainCanvas.width));
-    sel.y = Math.max(0, Math.min(sel.y, mainCanvas.height));
-    if (sel.x + sel.w > mainCanvas.width) sel.w = mainCanvas.width - sel.x;
-    if (sel.y + sel.h > mainCanvas.height) sel.h = mainCanvas.height - sel.y;
-
-    const rect = mainCanvas.getBoundingClientRect();
-    selDiv.style.display = sel.w > 2 && sel.h > 2 ? 'block' : 'none';
-    selDiv.style.left = sel.x + 'px';
-    selDiv.style.top = sel.y + 'px';
-    selDiv.style.width = sel.w + 'px';
-    selDiv.style.height = sel.h + 'px';
+    this.r = { x: rx, y: ry, w: rw, h: rh };
+    this.draw();
+    updateModalInfo();
   }
 
-  document.getElementById('btn-crop').addEventListener('click', () => {
-    if (sel.w < 4 || sel.h < 4) { alert('영역을 먼저 선택해주세요.'); return; }
+  _onUp() { this.mode = null; }
 
-    const sx = sel.x / scale;
-    const sy = sel.y / scale;
-    const sw = sel.w / scale;
-    const sh = sel.h / scale;
+  draw() {
+    const { ctx, c, img, r, sc } = this;
+    ctx.drawImage(img, 0, 0, c.width, c.height);
 
-    resultCanvas.width = Math.round(sw);
-    resultCanvas.height = Math.round(sh);
-    rCtx.drawImage(img, sx, sy, sw, sh, 0, 0, resultCanvas.width, resultCanvas.height);
+    // Dark overlay (4 rects)
+    ctx.fillStyle = 'rgba(0,0,0,0.58)';
+    ctx.fillRect(0,     0,      c.width, r.y);
+    ctx.fillRect(0,     r.y+r.h, c.width, c.height - r.y - r.h);
+    ctx.fillRect(0,     r.y,    r.x,     r.h);
+    ctx.fillRect(r.x+r.w, r.y, c.width - r.x - r.w, r.h);
 
-    resultInfo.textContent = `크롭 크기: ${resultCanvas.width} × ${resultCanvas.height}px`;
-    resultSection.style.display = 'flex';
-    btnDownload.style.display = 'inline-block';
-    resultSection.scrollIntoView({ behavior: 'smooth' });
-  });
+    // Crop border
+    ctx.strokeStyle = '#e94560';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
 
-  document.getElementById('btn-reset').addEventListener('click', () => {
-    clearSelection();
-    resultSection.style.display = 'none';
-    btnDownload.style.display = 'none';
-  });
+    // Rule of thirds
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(r.x + r.w*i/3, r.y); ctx.lineTo(r.x + r.w*i/3, r.y+r.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h*i/3); ctx.lineTo(r.x+r.w, r.y + r.h*i/3); ctx.stroke();
+    }
 
-  document.getElementById('btn-new').addEventListener('click', () => {
-    img = null;
-    fileInput.value = '';
-    workspace.style.display = 'none';
-    dropZone.style.display = 'block';
-    clearSelection();
-  });
+    // Handles
+    this.handles().forEach(h => {
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#e94560';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(h.x, h.y, this.HS*2, this.HS*2);
+      ctx.strokeRect(h.x, h.y, this.HS*2, this.HS*2);
+    });
 
-  btnDownload.addEventListener('click', () => {
-    const link = document.createElement('a');
-    link.download = 'cropped_image.png';
-    link.href = resultCanvas.toDataURL('image/png');
-    link.click();
-  });
+    // Size label
+    const ow = Math.round(r.w / sc), oh = Math.round(r.h / sc);
+    const label = `${ow} × ${oh}`;
+    ctx.font = 'bold 11px monospace';
+    const tw = ctx.measureText(label).width + 10;
+    const lx = Math.min(r.x, c.width - tw - 2);
+    const ly = r.y + r.h + 4;
+    if (ly + 18 < c.height) {
+      ctx.fillStyle = 'rgba(233,69,96,0.85)';
+      ctx.fillRect(lx, ly, tw, 18);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, lx + 5, ly + 13);
+    }
+  }
+
+  getResult() {
+    const s = this.sc;
+    return { x: this.r.x/s, y: this.r.y/s, w: this.r.w/s, h: this.r.h/s };
+  }
+
+  destroy() {
+    this.c.removeEventListener('mousedown',  this._down);
+    window.removeEventListener('mousemove',  this._move);
+    window.removeEventListener('mouseup',    this._up);
+    this.c.removeEventListener('touchstart', this._down);
+    window.removeEventListener('touchmove',  this._move);
+    window.removeEventListener('touchend',   this._up);
+  }
+}
 </script>
 </body>
 </html>
