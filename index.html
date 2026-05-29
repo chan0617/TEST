@@ -17,463 +17,349 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 36px 16px 80px;
-      gap: 20px;
     }
 
-    h1 {
-      font-size: 1.7rem;
-      background: linear-gradient(90deg, #e94560, #0f3460);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    #ai-status {
-      font-size: 0.78rem;
-      color: #555;
-      align-self: flex-end;
-      max-width: 860px;
-      width: 100%;
-      text-align: right;
-    }
-
-    #drop {
-      width: 100%;
-      max-width: 860px;
-      border: 2px dashed #e94560;
-      border-radius: 12px;
-      padding: 36px;
-      text-align: center;
-      cursor: pointer;
+    /* 상단 고정 바 */
+    #topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
       background: #16213e;
-      transition: background 0.2s;
-      user-select: none;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      flex-wrap: wrap;
     }
 
-    #drop:hover, #drop.over { background: #0f3460; }
-    #drop p { color: #bbb; margin-top: 8px; font-size: 0.9rem; }
-    #drop input { display: none; }
-    #drop .icon { font-size: 2rem; color: #555; }
+    #topbar h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #eee;
+      margin-right: 8px;
+    }
 
-    #items { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 860px; }
+    #ai-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #e67e22;
+      flex-shrink: 0;
+    }
+    #ai-dot.ready { background: #16a085; }
 
-    .item {
+    #ai-label { font-size: 0.75rem; color: #666; }
+
+    .spacer { flex: 1; }
+
+    button {
+      padding: 8px 18px;
+      border: none; border-radius: 6px;
+      font-size: 0.85rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    #btn-add  { background: #0f3460; color: #eee; }
+    #btn-zip  { background: #16a085; color: #fff; display: none; }
+    #btn-clear { background: #333; color: #aaa; display: none; }
+
+    #file-input, #add-input { display: none; }
+
+    /* 드롭 존 */
+    #drop {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 260px;
+      border: 2px dashed #0f3460;
+      margin: 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #drop:hover, #drop.over { border-color: #e94560; background: rgba(233,69,96,0.04); }
+    #drop p { color: #555; font-size: 0.9rem; }
+
+    /* 결과 그리드 */
+    #grid {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      padding: 24px;
+    }
+
+    .card {
       background: #16213e;
       border-radius: 10px;
       overflow: hidden;
       border: 1px solid #0f3460;
-    }
-
-    .item-header {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 12px;
-      font-size: 0.82rem;
-      color: #888;
-      border-bottom: 1px solid #0f3460;
+      flex-direction: column;
     }
 
-    .item-header .remove {
-      background: none;
-      border: none;
-      color: #555;
-      cursor: pointer;
-      font-size: 0.78rem;
-      padding: 2px 6px;
-    }
-
-    .item-header .remove:hover { color: #e94560; }
-
-    .crop-wrap {
-      position: relative;
-      display: flex;
-      justify-content: center;
-      padding: 12px;
-    }
-
-    .crop-canvas {
-      cursor: crosshair;
+    .card-img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: contain;
+      background: #1a1a2e;
       display: block;
-      max-width: 100%;
-      touch-action: none;
     }
 
-    .item-footer {
-      padding: 6px 12px;
-      font-size: 0.75rem;
-      color: #555;
-      border-top: 1px solid #0f3460;
+    .card-body {
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
-    #bottom-bar {
+    .card-name {
+      font-size: 0.72rem;
+      color: #888;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+
+    .card-status {
+      font-size: 0.7rem;
+      color: #e67e22;
+    }
+    .card-status.done { color: #16a085; }
+    .card-status.fail { color: #e94560; }
+
+    .card-dl {
+      font-size: 0.72rem;
+      color: #16a085;
+      text-decoration: none;
       display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0; right: 0;
-      background: #16213e;
-      border-top: 1px solid #0f3460;
-      padding: 12px 20px;
-      display: none;
-      justify-content: center;
-      gap: 12px;
-      z-index: 10;
     }
+    .card-dl:hover { text-decoration: underline; }
 
-    button {
-      padding: 10px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.88rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: opacity 0.15s;
+    /* 스피너 */
+    .spin {
+      width: 20px; height: 20px;
+      border: 3px solid #333;
+      border-top-color: #e67e22;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
     }
-
-    button:hover { opacity: 0.85; }
-    button:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    .btn-primary { background: #e94560; color: #fff; }
-    .btn-green   { background: #16a085; color: #fff; }
-    .btn-gray    { background: #333; color: #aaa; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-<h1>이미지 재단기</h1>
-<div id="ai-status">AI 모델 로딩 중...</div>
-
-<div id="drop">
-  <div class="icon">[ + ]</div>
-  <p>클릭하거나 이미지를 드래그하세요 (여러 장 가능)</p>
+<!-- 상단 버튼 바 -->
+<div id="topbar">
+  <h1>이미지 재단기</h1>
+  <div id="ai-dot"></div>
+  <span id="ai-label">AI 로딩 중</span>
+  <div class="spacer"></div>
+  <button id="btn-add">이미지 추가</button>
+  <button id="btn-zip">전체 다운로드 (ZIP)</button>
+  <button id="btn-clear">초기화</button>
   <input type="file" id="file-input" accept="image/*" multiple/>
+  <input type="file" id="add-input"  accept="image/*" multiple/>
 </div>
 
-<div id="items"></div>
-
-<div id="bottom-bar">
-  <button class="btn-primary" id="btn-add">이미지 추가</button>
-  <button class="btn-green"   id="btn-zip">전체 다운로드 (ZIP)</button>
-  <input type="file" id="add-input" accept="image/*" multiple style="display:none"/>
+<!-- 드롭 존 -->
+<div id="drop">
+  <p>이미지를 드래그하거나 클릭해서 올려주세요</p>
+  <p style="font-size:.8rem;color:#444">JPG · PNG · WebP · 여러 장 가능</p>
 </div>
+
+<!-- 결과 그리드 -->
+<div id="grid"></div>
 
 <script>
 let model = null;
-const editors = []; // { canvas, editor, img, file }
+const results = []; // { blob, name }
 
-// AI 모델은 백그라운드 로드 (화면 안 막음)
+// AI 백그라운드 로드
 cocoSsd.load().then(m => {
   model = m;
-  document.getElementById('ai-status').textContent = 'AI 준비 완료';
-  document.getElementById('ai-status').style.color = '#16a085';
+  document.getElementById('ai-dot').className = 'ready';
+  document.getElementById('ai-label').textContent = 'AI 준비 완료';
 }).catch(() => {
-  document.getElementById('ai-status').textContent = 'AI 없음 (수동 크롭만 가능)';
+  document.getElementById('ai-label').textContent = 'AI 없음 (여백 자동 제거)';
 });
 
-// 업로드
-const drop = document.getElementById('drop');
+// 업로드 이벤트
+const drop      = document.getElementById('drop');
 const fileInput = document.getElementById('file-input');
+const addInput  = document.getElementById('add-input');
 
 drop.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', e => { addFiles(Array.from(e.target.files)); e.target.value=''; });
+fileInput.addEventListener('change', e => { process(Array.from(e.target.files)); e.target.value = ''; });
+addInput.addEventListener('change',  e => { process(Array.from(e.target.files)); e.target.value = ''; });
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(Array.from(e.dataTransfer.files)); });
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); process(Array.from(e.dataTransfer.files)); });
 
-document.getElementById('btn-add').addEventListener('click', () => document.getElementById('add-input').click());
-document.getElementById('add-input').addEventListener('change', e => { addFiles(Array.from(e.target.files)); e.target.value=''; });
+document.getElementById('btn-add').addEventListener('click', () => addInput.click());
 
-function addFiles(files) {
-  files.filter(f => f.type.startsWith('image/')).forEach(loadItem);
-}
-
-function loadItem(file) {
-  const img = new Image();
-  img.onload = () => createItem(file, img);
-  img.src = URL.createObjectURL(file);
-}
-
-function createItem(file, img) {
-  const item = document.createElement('div');
-  item.className = 'item';
-
-  const header = document.createElement('div');
-  header.className = 'item-header';
-  const fname = document.createElement('span');
-  fname.textContent = file.name;
-  const rmBtn = document.createElement('button');
-  rmBtn.className = 'remove';
-  rmBtn.textContent = '삭제';
-  header.appendChild(fname);
-  header.appendChild(rmBtn);
-
-  const wrap = document.createElement('div');
-  wrap.className = 'crop-wrap';
-
-  const canvas = document.createElement('canvas');
-  canvas.className = 'crop-canvas';
-  wrap.appendChild(canvas);
-
-  const footer = document.createElement('div');
-  footer.className = 'item-footer';
-  footer.textContent = '영역을 드래그해서 재단 범위를 설정하세요';
-
-  item.appendChild(header);
-  item.appendChild(wrap);
-  item.appendChild(footer);
-  document.getElementById('items').appendChild(item);
-
-  // 초기 크롭 영역 (AI 감지 또는 기본값)
-  const initRect = { x: img.width*0.1, y: img.height*0.1, w: img.width*0.8, h: img.height*0.8 };
-
-  const ed = new CropEditor(canvas, img, initRect, rect => {
-    const w = Math.round(rect.w), h = Math.round(rect.h);
-    footer.textContent = `재단 크기: ${w} x ${h}px`;
-  });
-
-  const entry = { canvas, editor: ed, img, file, footer };
-  editors.push(entry);
-
-  rmBtn.addEventListener('click', () => {
-    const idx = editors.indexOf(entry);
-    if (idx !== -1) editors.splice(idx, 1);
-    item.remove();
-    if (editors.length === 0) {
-      drop.style.display = 'block';
-      document.getElementById('bottom-bar').style.display = 'none';
-    }
-  });
-
-  drop.style.display = 'none';
-  document.getElementById('bottom-bar').style.display = 'flex';
-
-  // AI 감지되면 크롭 영역 업데이트
-  if (model) {
-    model.detect(img).then(preds => {
-      if (!preds.length) return;
-      const best = preds.reduce((a, b) => a.score > b.score ? a : b);
-      const [bx, by, bw, bh] = best.bbox;
-      const pad = Math.min(bw, bh) * 0.1;
-      const rect = {
-        x: Math.max(0, bx - pad),
-        y: Math.max(0, by - pad),
-        w: Math.min(bw + pad * 2, img.width),
-        h: Math.min(bh + pad * 2, img.height),
-      };
-      ed.setRect(rect);
-      footer.textContent = `AI 감지: ${Math.round(rect.w)} x ${Math.round(rect.h)}px`;
-    }).catch(() => {});
-  }
-}
-
-// ZIP 다운로드
-document.getElementById('btn-zip').addEventListener('click', async () => {
-  if (!editors.length) return;
-  const btn = document.getElementById('btn-zip');
-  btn.disabled = true;
-  btn.textContent = 'ZIP 생성 중...';
-
-  const zip = new JSZip();
-  for (const { editor, img, file } of editors) {
-    const rect = editor.getRect();
-    const blob = await cropBlob(img, rect);
-    const name = 'cropped_' + file.name.replace(/\.[^.]+$/, '') + '.png';
-    zip.file(name, blob);
-  }
-
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(zipBlob);
-  a.download = 'cropped.zip';
-  a.click();
-
-  btn.disabled = false;
-  btn.textContent = '전체 다운로드 (ZIP)';
+document.getElementById('btn-clear').addEventListener('click', () => {
+  results.length = 0;
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('grid').style.display = 'none';
+  drop.style.display = 'flex';
+  document.getElementById('btn-zip').style.display = 'none';
+  document.getElementById('btn-clear').style.display = 'none';
 });
 
+// 이미지 처리
+function process(files) {
+  const imgs = files.filter(f => f.type.startsWith('image/'));
+  if (!imgs.length) return;
+
+  drop.style.display = 'none';
+  const grid = document.getElementById('grid');
+  grid.style.display = 'grid';
+  document.getElementById('btn-clear').style.display = 'inline-block';
+
+  imgs.forEach(file => {
+    // 카드 생성
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const img = document.createElement('img');
+    img.className = 'card-img';
+    img.src = URL.createObjectURL(file);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const name = document.createElement('div');
+    name.className = 'card-name';
+    name.textContent = file.name;
+
+    const status = document.createElement('div');
+    status.className = 'card-status';
+
+    const spinWrap = document.createElement('div');
+    spinWrap.style.display = 'flex'; spinWrap.style.alignItems = 'center'; spinWrap.style.gap = '6px';
+    const spin = document.createElement('div'); spin.className = 'spin';
+    spinWrap.appendChild(spin); spinWrap.appendChild(status);
+    status.textContent = '분석 중...';
+
+    const dl = document.createElement('a');
+    dl.className = 'card-dl';
+    dl.textContent = '개별 다운로드';
+
+    body.appendChild(name);
+    body.appendChild(spinWrap);
+    body.appendChild(dl);
+    card.appendChild(img);
+    card.appendChild(body);
+    grid.appendChild(card);
+
+    // 자동 재단
+    const srcImg = new Image();
+    srcImg.onload = async () => {
+      try {
+        const rect = await getAutoCropRect(srcImg);
+        const blob = await cropBlob(srcImg, rect);
+
+        const outName = file.name.replace(/\.[^.]+$/, '') + '_재단.png';
+        results.push({ blob, name: outName });
+
+        const url = URL.createObjectURL(blob);
+        img.src = url;
+        spin.remove();
+        status.textContent = `${Math.round(rect.w)} x ${Math.round(rect.h)}px`;
+        status.className = 'card-status done';
+        dl.href = url; dl.download = outName; dl.style.display = 'block';
+
+        document.getElementById('btn-zip').style.display = 'inline-block';
+      } catch(e) {
+        spin.remove();
+        status.textContent = '처리 실패';
+        status.className = 'card-status fail';
+      }
+    };
+    srcImg.src = URL.createObjectURL(file);
+  });
+}
+
+// AI 감지 → 없으면 여백 제거
+async function getAutoCropRect(img) {
+  if (model) {
+    try {
+      const preds = await model.detect(img);
+      if (preds.length) {
+        const best = preds.reduce((a, b) => a.score > b.score ? a : b);
+        const [bx, by, bw, bh] = best.bbox;
+        const pad = Math.min(bw, bh) * 0.08;
+        return clamp({
+          x: bx - pad,
+          y: by - pad,
+          w: bw + pad * 2,
+          h: bh + pad * 2,
+        }, img.width, img.height);
+      }
+    } catch(e) {}
+  }
+  return trimWhitespace(img);
+}
+
+// 여백(배경색) 자동 제거
+function trimWhitespace(img) {
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, img.width, img.height).data;
+
+  const bgR = d[0], bgG = d[1], bgB = d[2];
+  const thr = 30;
+
+  function isBg(x, y) {
+    const i = (y * img.width + x) * 4;
+    return Math.abs(d[i]-bgR) < thr && Math.abs(d[i+1]-bgG) < thr && Math.abs(d[i+2]-bgB) < thr;
+  }
+
+  let top = 0, bottom = img.height - 1, left = 0, right = img.width - 1;
+
+  top:    for (let y = 0;            y < img.height; y++) { for (let x = 0; x < img.width;  x++) { if (!isBg(x,y)) { top    = y; break top;    } } }
+  bottom: for (let y = img.height-1; y >= 0;         y--) { for (let x = 0; x < img.width;  x++) { if (!isBg(x,y)) { bottom = y; break bottom; } } }
+  left:   for (let x = 0;            x < img.width;  x++) { for (let y = top; y <= bottom;  y++) { if (!isBg(x,y)) { left   = x; break left;   } } }
+  right:  for (let x = img.width-1;  x >= 0;         x--) { for (let y = top; y <= bottom;  y++) { if (!isBg(x,y)) { right  = x; break right;  } } }
+
+  const pad = 8;
+  return clamp({ x: left-pad, y: top-pad, w: right-left+pad*2, h: bottom-top+pad*2 }, img.width, img.height);
+}
+
+function clamp(r, iw, ih) {
+  const x = Math.max(0, r.x);
+  const y = Math.max(0, r.y);
+  return { x, y, w: Math.min(r.w, iw-x), h: Math.min(r.h, ih-y) };
+}
+
 function cropBlob(img, rect) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const c = document.createElement('canvas');
     c.width  = Math.round(rect.w);
     c.height = Math.round(rect.h);
     c.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height);
-    c.toBlob(resolve, 'image/png');
+    c.toBlob(b => b ? resolve(b) : reject(), 'image/png');
   });
 }
 
-// ── CropEditor ─────────────────────────────────────────────────
-class CropEditor {
-  constructor(canvas, img, initRect, onChange) {
-    this.c = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.img = img;
-    this.onChange = onChange;
-    this.HS = 6; // handle half-size px
-
-    const maxW = Math.min(window.innerWidth - 56, 828);
-    this.sc = Math.min(maxW / img.width, 600 / img.height, 1);
-    this.c.width  = Math.round(img.width  * this.sc);
-    this.c.height = Math.round(img.height * this.sc);
-
-    this.r = this._toDisplay(initRect);
-    this.mode = null;
-    this.ox = 0; this.oy = 0;
-    this.r0 = null;
-
-    this._onDown = this._onDown.bind(this);
-    this._onMove = this._onMove.bind(this);
-    this._onUp   = this._onUp.bind(this);
-
-    canvas.addEventListener('mousedown',  this._onDown);
-    window.addEventListener('mousemove',  this._onMove);
-    window.addEventListener('mouseup',    this._onUp);
-    canvas.addEventListener('touchstart', this._onDown, { passive: false });
-    window.addEventListener('touchmove',  this._onMove, { passive: false });
-    window.addEventListener('touchend',   this._onUp);
-
-    this.draw();
-  }
-
-  _toDisplay(r) {
-    return { x: r.x*this.sc, y: r.y*this.sc, w: r.w*this.sc, h: r.h*this.sc };
-  }
-
-  setRect(r) {
-    this.r = this._toDisplay(r);
-    this.draw();
-    if (this.onChange) this.onChange(this.getRect());
-  }
-
-  getRect() {
-    return { x: this.r.x/this.sc, y: this.r.y/this.sc, w: this.r.w/this.sc, h: this.r.h/this.sc };
-  }
-
-  _handles() {
-    const { x, y, w, h } = this.r, s = this.HS;
-    return [
-      { x: x-s,     y: y-s     }, // 0 TL
-      { x: x+w/2-s, y: y-s     }, // 1 T
-      { x: x+w-s,   y: y-s     }, // 2 TR
-      { x: x+w-s,   y: y+h/2-s }, // 3 R
-      { x: x+w-s,   y: y+h-s   }, // 4 BR
-      { x: x+w/2-s, y: y+h-s   }, // 5 B
-      { x: x-s,     y: y+h-s   }, // 6 BL
-      { x: x-s,     y: y+h/2-s }, // 7 L
-    ];
-  }
-
-  _hitHandle(mx, my) {
-    const s = this.HS * 2;
-    return this._handles().findIndex(h => mx >= h.x && mx <= h.x+s && my >= h.y && my <= h.y+s);
-  }
-
-  _inRect(mx, my) {
-    const { x, y, w, h } = this.r;
-    return mx > x && mx < x+w && my > y && my < y+h;
-  }
-
-  _pt(e) {
-    const r = this.c.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - r.left, y: src.clientY - r.top };
-  }
-
-  _onDown(e) {
-    if (e.touches) e.preventDefault();
-    const { x, y } = this._pt(e);
-    this.ox = x; this.oy = y;
-    this.r0 = { ...this.r };
-    const hi = this._hitHandle(x, y);
-    this.mode = hi !== -1 ? hi : this._inRect(x, y) ? 'move' : 'new';
-    if (this.mode === 'new') {
-      this.r0 = { x, y, w: 0, h: 0 };
-    }
-  }
-
-  _onMove(e) {
-    if (this.mode === null) return;
-    if (e.touches) e.preventDefault();
-    const { x, y } = this._pt(e);
-    const dx = x - this.ox, dy = y - this.oy;
-    const cw = this.c.width, ch = this.c.height;
-    let { x: rx, y: ry, w: rw, h: rh } = this.r0;
-
-    if (this.mode === 'new') {
-      const nx = Math.min(this.ox, x), ny = Math.min(this.oy, y);
-      const nw = Math.abs(x - this.ox), nh = Math.abs(y - this.oy);
-      this.r = {
-        x: Math.max(0, nx), y: Math.max(0, ny),
-        w: Math.min(nw, cw - Math.max(0, nx)),
-        h: Math.min(nh, ch - Math.max(0, ny)),
-      };
-    } else if (this.mode === 'move') {
-      this.r = {
-        x: Math.max(0, Math.min(rx+dx, cw-rw)),
-        y: Math.max(0, Math.min(ry+dy, ch-rh)),
-        w: rw, h: rh,
-      };
-    } else {
-      switch (this.mode) {
-        case 0: rx+=dx; ry+=dy; rw-=dx; rh-=dy; break;
-        case 1: ry+=dy; rh-=dy; break;
-        case 2: ry+=dy; rw+=dx; rh-=dy; break;
-        case 3: rw+=dx; break;
-        case 4: rw+=dx; rh+=dy; break;
-        case 5: rh+=dy; break;
-        case 6: rx+=dx; rw-=dx; rh+=dy; break;
-        case 7: rx+=dx; rw-=dx; break;
-      }
-      const MIN = 10;
-      if (rw < MIN) { if ([0,6,7].includes(this.mode)) rx = this.r0.x + this.r0.w - MIN; rw = MIN; }
-      if (rh < MIN) { if ([0,1,2].includes(this.mode)) ry = this.r0.y + this.r0.h - MIN; rh = MIN; }
-      rx = Math.max(0, rx); ry = Math.max(0, ry);
-      rw = Math.min(rw, cw-rx); rh = Math.min(rh, ch-ry);
-      this.r = { x: rx, y: ry, w: rw, h: rh };
-    }
-
-    this.draw();
-    if (this.onChange) this.onChange(this.getRect());
-  }
-
-  _onUp() { this.mode = null; }
-
-  draw() {
-    const { ctx, c, img, r, sc } = this;
-
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-
-    // 어두운 오버레이 (4분할)
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0,       0,       c.width, r.y);
-    ctx.fillRect(0,       r.y+r.h, c.width, c.height - r.y - r.h);
-    ctx.fillRect(0,       r.y,     r.x,     r.h);
-    ctx.fillRect(r.x+r.w, r.y,     c.width - r.x - r.w, r.h);
-
-    // 재단 경계선
-    ctx.strokeStyle = '#e94560';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-    // 3등분 가이드
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 0.8;
-    for (let i = 1; i < 3; i++) {
-      ctx.beginPath(); ctx.moveTo(r.x + r.w*i/3, r.y); ctx.lineTo(r.x + r.w*i/3, r.y+r.h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(r.x, r.y + r.h*i/3); ctx.lineTo(r.x+r.w, r.y + r.h*i/3); ctx.stroke();
-    }
-
-    // 핸들
-    const s = this.HS;
-    this._handles().forEach(h => {
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#e94560';
-      ctx.lineWidth = 1;
-      ctx.fillRect(h.x, h.y, s*2, s*2);
-      ctx.strokeRect(h.x, h.y, s*2, s*2);
-    });
-  }
-}
+// ZIP
+document.getElementById('btn-zip').addEventListener('click', async () => {
+  if (!results.length) return;
+  const btn = document.getElementById('btn-zip');
+  btn.disabled = true; btn.textContent = '생성 중...';
+  const zip = new JSZip();
+  results.forEach(({ blob, name }) => zip.file(name, blob));
+  const z = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(z); a.download = '재단이미지.zip'; a.click();
+  btn.disabled = false; btn.textContent = '전체 다운로드 (ZIP)';
+});
 </script>
 </body>
 </html>
