@@ -15,277 +15,208 @@
       color: #eee;
       font-family: 'Segoe UI', sans-serif;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
     }
 
-    /* 상단 고정 바 */
     #topbar {
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      position: sticky; top: 0; z-index: 100;
       background: #16213e;
       border-bottom: 1px solid #0f3460;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 24px;
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 20px; flex-wrap: wrap;
     }
 
-    #topbar h1 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #eee;
-      margin-right: 8px;
-    }
+    #topbar h1 { font-size: 1rem; font-weight: 700; color: #eee; }
 
-    #ai-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #e67e22;
-      flex-shrink: 0;
-    }
-    #ai-dot.ready { background: #16a085; }
-
-    #ai-label { font-size: 0.75rem; color: #666; }
+    #ai-label { font-size: 0.72rem; color: #555; }
+    #ai-label.ready { color: #16a085; }
 
     .spacer { flex: 1; }
 
     button {
-      padding: 8px 18px;
-      border: none; border-radius: 6px;
-      font-size: 0.85rem; font-weight: 700;
-      cursor: pointer; transition: opacity 0.15s;
+      padding: 7px 16px; border: none; border-radius: 6px;
+      font-size: 0.82rem; font-weight: 700; cursor: pointer;
     }
     button:hover { opacity: 0.85; }
     button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-    #btn-add  { background: #0f3460; color: #eee; }
-    #btn-zip  { background: #16a085; color: #fff; display: none; }
-    #btn-clear { background: #333; color: #aaa; display: none; }
+    #btn-add   { background: #0f3460; color: #eee; }
+    #btn-zip   { background: #16a085; color: #fff; }
+    #btn-clear { background: #333; color: #aaa; }
 
-    #file-input, #add-input { display: none; }
+    input[type=file] { display: none; }
 
-    /* 드롭 존 */
-    #drop {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      min-height: 260px;
-      border: 2px dashed #0f3460;
-      margin: 24px;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+    #empty {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: calc(100vh - 52px);
+      gap: 10px; cursor: pointer;
+      border: 2px dashed #0f3460; margin: 20px; border-radius: 12px;
     }
-    #drop:hover, #drop.over { border-color: #e94560; background: rgba(233,69,96,0.04); }
-    #drop p { color: #555; font-size: 0.9rem; }
+    #empty:hover, #empty.over { border-color: #e94560; }
+    #empty p { color: #555; font-size: 0.9rem; }
 
-    /* 결과 그리드 */
     #grid {
-      display: none;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 16px;
-      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px; padding: 20px;
     }
 
     .card {
       background: #16213e;
-      border-radius: 10px;
-      overflow: hidden;
+      border-radius: 8px; overflow: hidden;
       border: 1px solid #0f3460;
-      display: flex;
-      flex-direction: column;
     }
 
-    .card-img {
-      width: 100%;
-      aspect-ratio: 1;
+    .card-thumb {
+      width: 100%; height: 160px;
       object-fit: contain;
-      background: #1a1a2e;
+      background: #111827;
       display: block;
     }
 
-    .card-body {
-      padding: 8px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .card-info {
+      padding: 7px 10px;
+      font-size: 0.72rem; color: #666;
+      display: flex; justify-content: space-between; align-items: center;
     }
 
-    .card-name {
-      font-size: 0.72rem;
-      color: #888;
-      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-    }
+    .card-info a { color: #16a085; text-decoration: none; font-size: 0.7rem; }
+    .card-info a:hover { text-decoration: underline; }
 
-    .card-status {
-      font-size: 0.7rem;
-      color: #e67e22;
-    }
-    .card-status.done { color: #16a085; }
-    .card-status.fail { color: #e94560; }
-
-    .card-dl {
-      font-size: 0.72rem;
-      color: #16a085;
-      text-decoration: none;
-      display: none;
-    }
-    .card-dl:hover { text-decoration: underline; }
-
-    /* 스피너 */
-    .spin {
-      width: 20px; height: 20px;
-      border: 3px solid #333;
-      border-top-color: #e67e22;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .card-info .processing { color: #e67e22; }
+    .card-info .done { color: #16a085; }
   </style>
 </head>
 <body>
 
-<!-- 상단 버튼 바 -->
 <div id="topbar">
   <h1>이미지 재단기</h1>
-  <div id="ai-dot"></div>
-  <span id="ai-label">AI 로딩 중</span>
+  <span id="ai-label">AI 로딩 중...</span>
   <div class="spacer"></div>
   <button id="btn-add">이미지 추가</button>
-  <button id="btn-zip">전체 다운로드 (ZIP)</button>
+  <button id="btn-zip" disabled>전체 다운로드 (ZIP)</button>
   <button id="btn-clear">초기화</button>
   <input type="file" id="file-input" accept="image/*" multiple/>
   <input type="file" id="add-input"  accept="image/*" multiple/>
 </div>
 
-<!-- 드롭 존 -->
-<div id="drop">
-  <p>이미지를 드래그하거나 클릭해서 올려주세요</p>
-  <p style="font-size:.8rem;color:#444">JPG · PNG · WebP · 여러 장 가능</p>
+<div id="empty">
+  <p>이미지를 드래그하거나 클릭하세요</p>
+  <p style="font-size:.78rem;color:#333">JPG · PNG · WebP · 여러 장 가능</p>
 </div>
 
-<!-- 결과 그리드 -->
-<div id="grid"></div>
+<div id="grid" style="display:none"></div>
 
 <script>
 let model = null;
-const results = []; // { blob, name }
+const blobs = [];
 
-// AI 백그라운드 로드
 cocoSsd.load().then(m => {
   model = m;
-  document.getElementById('ai-dot').className = 'ready';
-  document.getElementById('ai-label').textContent = 'AI 준비 완료';
+  const el = document.getElementById('ai-label');
+  el.textContent = 'AI 준비 완료';
+  el.className = 'ready';
 }).catch(() => {
-  document.getElementById('ai-label').textContent = 'AI 없음 (여백 자동 제거)';
+  document.getElementById('ai-label').textContent = 'AI 없음';
 });
 
-// 업로드 이벤트
-const drop      = document.getElementById('drop');
+// 이벤트 연결
+const empty     = document.getElementById('empty');
 const fileInput = document.getElementById('file-input');
 const addInput  = document.getElementById('add-input');
 
-drop.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', e => { process(Array.from(e.target.files)); e.target.value = ''; });
-addInput.addEventListener('change',  e => { process(Array.from(e.target.files)); e.target.value = ''; });
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); process(Array.from(e.dataTransfer.files)); });
+empty.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { run(Array.from(e.target.files)); e.target.value = ''; });
+addInput.addEventListener('change',  e => { run(Array.from(e.target.files)); e.target.value = ''; });
+empty.addEventListener('dragover',  e => { e.preventDefault(); empty.classList.add('over'); });
+empty.addEventListener('dragleave', () => empty.classList.remove('over'));
+empty.addEventListener('drop', e => { e.preventDefault(); empty.classList.remove('over'); run(Array.from(e.dataTransfer.files)); });
 
 document.getElementById('btn-add').addEventListener('click', () => addInput.click());
 
 document.getElementById('btn-clear').addEventListener('click', () => {
-  results.length = 0;
+  blobs.length = 0;
   document.getElementById('grid').innerHTML = '';
   document.getElementById('grid').style.display = 'none';
-  drop.style.display = 'flex';
-  document.getElementById('btn-zip').style.display = 'none';
-  document.getElementById('btn-clear').style.display = 'none';
+  empty.style.display = 'flex';
+  document.getElementById('btn-zip').disabled = true;
 });
 
-// 이미지 처리
-function process(files) {
+document.getElementById('btn-zip').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-zip');
+  btn.disabled = true; btn.textContent = '생성 중...';
+  const zip = new JSZip();
+  blobs.forEach(({ blob, name }) => zip.file(name, blob));
+  const z = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(z);
+  a.download = '재단이미지.zip';
+  a.click();
+  btn.disabled = false; btn.textContent = '전체 다운로드 (ZIP)';
+});
+
+function run(files) {
   const imgs = files.filter(f => f.type.startsWith('image/'));
   if (!imgs.length) return;
 
-  drop.style.display = 'none';
-  const grid = document.getElementById('grid');
-  grid.style.display = 'grid';
-  document.getElementById('btn-clear').style.display = 'inline-block';
+  empty.style.display = 'none';
+  document.getElementById('grid').style.display = 'grid';
 
   imgs.forEach(file => {
-    // 카드 생성
+    // 카드 즉시 생성 + 원본 이미지 바로 표시
+    const origUrl = URL.createObjectURL(file);
+
     const card = document.createElement('div');
     card.className = 'card';
 
-    const img = document.createElement('img');
-    img.className = 'card-img';
-    img.src = URL.createObjectURL(file);
+    const thumb = document.createElement('img');
+    thumb.className = 'card-thumb';
+    thumb.src = origUrl; // 원본 바로 표시
 
-    const body = document.createElement('div');
-    body.className = 'card-body';
+    const info = document.createElement('div');
+    info.className = 'card-info';
 
-    const name = document.createElement('div');
-    name.className = 'card-name';
-    name.textContent = file.name;
+    const status = document.createElement('span');
+    status.className = 'processing';
+    status.textContent = '재단 중...';
 
-    const status = document.createElement('div');
-    status.className = 'card-status';
+    info.appendChild(status);
+    card.appendChild(thumb);
+    card.appendChild(info);
+    document.getElementById('grid').appendChild(card);
 
-    const spinWrap = document.createElement('div');
-    spinWrap.style.display = 'flex'; spinWrap.style.alignItems = 'center'; spinWrap.style.gap = '6px';
-    const spin = document.createElement('div'); spin.className = 'spin';
-    spinWrap.appendChild(spin); spinWrap.appendChild(status);
-    status.textContent = '분석 중...';
-
-    const dl = document.createElement('a');
-    dl.className = 'card-dl';
-    dl.textContent = '개별 다운로드';
-
-    body.appendChild(name);
-    body.appendChild(spinWrap);
-    body.appendChild(dl);
-    card.appendChild(img);
-    card.appendChild(body);
-    grid.appendChild(card);
-
-    // 자동 재단
-    const srcImg = new Image();
-    srcImg.onload = async () => {
+    // 백그라운드에서 재단 처리
+    const src = new Image();
+    src.onload = async () => {
       try {
-        const rect = await getAutoCropRect(srcImg);
-        const blob = await cropBlob(srcImg, rect);
-
+        const rect = await autoCrop(src);
+        const blob = await cropToBlob(src, rect);
         const outName = file.name.replace(/\.[^.]+$/, '') + '_재단.png';
-        results.push({ blob, name: outName });
 
-        const url = URL.createObjectURL(blob);
-        img.src = url;
-        spin.remove();
-        status.textContent = `${Math.round(rect.w)} x ${Math.round(rect.h)}px`;
-        status.className = 'card-status done';
-        dl.href = url; dl.download = outName; dl.style.display = 'block';
+        blobs.push({ blob, name: outName });
 
-        document.getElementById('btn-zip').style.display = 'inline-block';
-      } catch(e) {
-        spin.remove();
-        status.textContent = '처리 실패';
-        status.className = 'card-status fail';
+        // 재단된 이미지로 교체
+        thumb.src = URL.createObjectURL(blob);
+
+        const dl = document.createElement('a');
+        dl.href = thumb.src; dl.download = outName; dl.textContent = '저장';
+
+        status.className = 'done';
+        status.textContent = `${Math.round(rect.w)} x ${Math.round(rect.h)}`;
+        info.appendChild(dl);
+
+        document.getElementById('btn-zip').disabled = false;
+      } catch {
+        status.className = '';
+        status.textContent = '실패';
       }
     };
-    srcImg.src = URL.createObjectURL(file);
+    src.src = origUrl;
   });
 }
 
-// AI 감지 → 없으면 여백 제거
-async function getAutoCropRect(img) {
+async function autoCrop(img) {
+  // AI 객체 감지
   if (model) {
     try {
       const preds = await model.detect(img);
@@ -293,73 +224,53 @@ async function getAutoCropRect(img) {
         const best = preds.reduce((a, b) => a.score > b.score ? a : b);
         const [bx, by, bw, bh] = best.bbox;
         const pad = Math.min(bw, bh) * 0.08;
-        return clamp({
-          x: bx - pad,
-          y: by - pad,
-          w: bw + pad * 2,
-          h: bh + pad * 2,
-        }, img.width, img.height);
+        return clamp({ x: bx-pad, y: by-pad, w: bw+pad*2, h: bh+pad*2 }, img);
       }
     } catch(e) {}
   }
-  return trimWhitespace(img);
+  // 여백 자동 제거
+  return trimBg(img);
 }
 
-// 여백(배경색) 자동 제거
-function trimWhitespace(img) {
+function trimBg(img) {
   const c = document.createElement('canvas');
   c.width = img.width; c.height = img.height;
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0);
   const d = ctx.getImageData(0, 0, img.width, img.height).data;
 
-  const bgR = d[0], bgG = d[1], bgB = d[2];
+  const br = d[0], bg = d[1], bb = d[2];
   const thr = 30;
 
   function isBg(x, y) {
     const i = (y * img.width + x) * 4;
-    return Math.abs(d[i]-bgR) < thr && Math.abs(d[i+1]-bgG) < thr && Math.abs(d[i+2]-bgB) < thr;
+    return Math.abs(d[i]-br)<thr && Math.abs(d[i+1]-bg)<thr && Math.abs(d[i+2]-bb)<thr;
   }
 
-  let top = 0, bottom = img.height - 1, left = 0, right = img.width - 1;
-
-  top:    for (let y = 0;            y < img.height; y++) { for (let x = 0; x < img.width;  x++) { if (!isBg(x,y)) { top    = y; break top;    } } }
-  bottom: for (let y = img.height-1; y >= 0;         y--) { for (let x = 0; x < img.width;  x++) { if (!isBg(x,y)) { bottom = y; break bottom; } } }
-  left:   for (let x = 0;            x < img.width;  x++) { for (let y = top; y <= bottom;  y++) { if (!isBg(x,y)) { left   = x; break left;   } } }
-  right:  for (let x = img.width-1;  x >= 0;         x--) { for (let y = top; y <= bottom;  y++) { if (!isBg(x,y)) { right  = x; break right;  } } }
+  let t=0, b=img.height-1, l=0, r=img.width-1;
+  top:    for (let y=0;           y<img.height; y++) for (let x=0; x<img.width;  x++) { if (!isBg(x,y)) { t=y; break top;    } }
+  btm:    for (let y=img.height-1;y>=0;         y--) for (let x=0; x<img.width;  x++) { if (!isBg(x,y)) { b=y; break btm;    } }
+  lft:    for (let x=0;           x<img.width;  x++) for (let y=t; y<=b;         y++) { if (!isBg(x,y)) { l=x; break lft;    } }
+  rgt:    for (let x=img.width-1; x>=0;         x--) for (let y=t; y<=b;         y++) { if (!isBg(x,y)) { r=x; break rgt;    } }
 
   const pad = 8;
-  return clamp({ x: left-pad, y: top-pad, w: right-left+pad*2, h: bottom-top+pad*2 }, img.width, img.height);
+  return clamp({ x: l-pad, y: t-pad, w: r-l+pad*2, h: b-t+pad*2 }, img);
 }
 
-function clamp(r, iw, ih) {
-  const x = Math.max(0, r.x);
-  const y = Math.max(0, r.y);
-  return { x, y, w: Math.min(r.w, iw-x), h: Math.min(r.h, ih-y) };
+function clamp(r, img) {
+  const x = Math.max(0, r.x), y = Math.max(0, r.y);
+  return { x, y, w: Math.min(r.w, img.width-x), h: Math.min(r.h, img.height-y) };
 }
 
-function cropBlob(img, rect) {
-  return new Promise((resolve, reject) => {
+function cropToBlob(img, rect) {
+  return new Promise((res, rej) => {
     const c = document.createElement('canvas');
     c.width  = Math.round(rect.w);
     c.height = Math.round(rect.h);
     c.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height);
-    c.toBlob(b => b ? resolve(b) : reject(), 'image/png');
+    c.toBlob(b => b ? res(b) : rej(), 'image/png');
   });
 }
-
-// ZIP
-document.getElementById('btn-zip').addEventListener('click', async () => {
-  if (!results.length) return;
-  const btn = document.getElementById('btn-zip');
-  btn.disabled = true; btn.textContent = '생성 중...';
-  const zip = new JSZip();
-  results.forEach(({ blob, name }) => zip.file(name, blob));
-  const z = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(z); a.download = '재단이미지.zip'; a.click();
-  btn.disabled = false; btn.textContent = '전체 다운로드 (ZIP)';
-});
 </script>
 </body>
 </html>
