@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>이미지 재단기</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; }
+
+    #topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: #16213e; border-bottom: 1px solid #0f3460;
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px; flex-wrap: wrap;
+    }
+    #topbar h1 { font-size: 1rem; font-weight: 700; margin-right: auto; }
+
+    button {
+      padding: 8px 18px; border: none; border-radius: 6px;
+      font-size: 0.85rem; font-weight: 700; cursor: pointer;
+    }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    #btn-add   { background: #0f3460; color: #eee; }
+    #btn-crop  { background: #e94560; color: #fff; }
+    #btn-zip   { background: #16a085; color: #fff; display: none; }
+    #btn-clear { background: #333; color: #aaa; display: none; }
+    input[type=file] { display: none; }
+
+    #api-row {
+      width: 100%; display: flex; align-items: center; gap: 8px;
+      padding: 8px 20px; background: #111827; border-bottom: 1px solid #0f3460;
+      font-size: 0.78rem; color: #666;
+    }
+    #api-row input[type=text] {
+      flex: 1; max-width: 320px;
+      background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px;
+      padding: 5px 10px; color: #eee; font-size: 0.78rem;
+    }
+    #api-row a { color: #16a085; font-size: 0.75rem; }
+
+    #drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: calc(100vh - 96px); gap: 8px; cursor: pointer;
+      border: 2px dashed #0f3460; margin: 20px; border-radius: 12px;
+    }
+    #drop:hover, #drop.over { border-color: #e94560; }
+    #drop p { color: #555; font-size: 0.9rem; }
+
+    #grid {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px; padding: 20px;
+    }
+    .card { background: #16213e; border-radius: 8px; overflow: hidden; border: 1px solid #0f3460; }
+    .card img { width: 100%; height: 150px; object-fit: contain; background: #111827; display: block; }
+    .card p   { font-size: 0.7rem; color: #666; padding: 5px 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .card a   { font-size: 0.7rem; color: #16a085; padding: 0 8px 6px; display: block; text-decoration: none; }
+    .card a:hover { text-decoration: underline; }
+    .card .err { font-size: 0.7rem; color: #e94560; padding: 0 8px 6px; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>이미지 재단기</h1>
+  <button id="btn-add">이미지 추가</button>
+  <button id="btn-crop" disabled>재단하기</button>
+  <button id="btn-zip">전체 다운로드 (ZIP)</button>
+  <button id="btn-clear">초기화</button>
+  <input type="file" id="file-input" accept="image/*" multiple/>
+  <input type="file" id="add-input"  accept="image/*" multiple/>
+</div>
+
+<!-- Remove.bg API 키 (선택) -->
+<div id="api-row">
+  <span>Remove.bg API 키 (선택 — 없으면 픽셀 분석으로 처리)</span>
+  <input type="text" id="api-key" placeholder="없으면 비워두세요"/>
+  <a href="https://www.remove.bg/api" target="_blank">무료 키 발급</a>
+</div>
+
+<div id="drop">
+  <p>이미지를 드래그하거나 클릭하세요</p>
+  <p style="font-size:.78rem;color:#333">여러 장 가능 · JPG · PNG · WebP</p>
+</div>
+<div id="grid"></div>
+
+<script>
+const queue = [];
+const saved = [];
+
+// 업로드
+const drop = document.getElementById('drop');
+document.getElementById('file-input').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+document.getElementById('add-input' ).addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+drop.addEventListener('click',     () => document.getElementById('file-input').click());
+drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+document.getElementById('btn-add').addEventListener('click', () => document.getElementById('add-input').click());
+
+function addFiles(files) {
+  Array.from(files).filter(f => f.type.startsWith('image/')).forEach(file => {
+    const url   = URL.createObjectURL(file);
+    const card  = document.createElement('div'); card.className = 'card';
+    const thumb = document.createElement('img'); thumb.src = url;
+    const label = document.createElement('p');   label.textContent = file.name;
+    card.appendChild(thumb);
+    card.appendChild(label);
+    document.getElementById('grid').appendChild(card);
+
+    const img = new Image();
+    img.onload = () => queue.push({ file, img, thumb, label, card });
+    img.src = url;
+  });
+
+  drop.style.display = 'none';
+  document.getElementById('grid').style.display = 'grid';
+  document.getElementById('btn-crop').disabled = false;
+  document.getElementById('btn-clear').style.display = 'inline-block';
+}
+
+// 재단하기
+document.getElementById('btn-crop').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-crop');
+  const apiKey = document.getElementById('api-key').value.trim();
+  btn.disabled = true;
+
+  for (const item of queue) {
+    try {
+      const blob = apiKey
+        ? await removeBgApi(item.file, apiKey)
+        : await pixelAutoCrop(item.img);
+
+      if (!blob) throw new Error('결과 없음');
+
+      const name = item.file.name.replace(/\.[^.]+$/, '') + '_재단.png';
+      const url  = URL.createObjectURL(blob);
+      saved.push({ blob, name });
+
+      item.thumb.src = url;
+      item.label.textContent = name;
+      if (!item.card.querySelector('a')) {
+        const a = document.createElement('a');
+        a.href = url; a.download = name; a.textContent = '저장';
+        item.card.appendChild(a);
+      }
+    } catch (e) {
+      if (!item.card.querySelector('.err')) {
+        const err = document.createElement('div');
+        err.className = 'err';
+        err.textContent = '실패: ' + (e.message || '오류');
+        item.card.appendChild(err);
+      }
+    }
+  }
+
+  if (saved.length) document.getElementById('btn-zip').style.display = 'inline-block';
+  btn.disabled = false;
+});
+
+// ── Remove.bg API ────────────────────────────────────────────────
+async function removeBgApi(file, apiKey) {
+  const form = new FormData();
+  form.append('image_file', file);
+  form.append('size', 'auto');
+
+  const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: { 'X-Api-Key': apiKey },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`remove.bg: ${res.status} ${msg}`);
+  }
+
+  // 배경 제거된 PNG → 투명 픽셀 기준으로 crop
+  const blob = await res.blob();
+  const img  = await loadImg(URL.createObjectURL(blob));
+  return pixelAutoCrop(img);
+}
+
+// ── 픽셀 분석 Auto Crop ──────────────────────────────────────────
+// 원본 이미지 naturalWidth × naturalHeight 를 canvas에 그리고
+// getImageData 로 전체 픽셀을 읽어 배경과 다른 픽셀의 bounding box를 계산한다.
+async function pixelAutoCrop(img) {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+
+  // 원본 해상도 canvas
+  const canvas = document.createElement('canvas');
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, W, H);
+
+  // 원본 픽셀 데이터 전체 읽기
+  const { data } = ctx.getImageData(0, 0, W, H);
+
+  // 배경색 추정: 상하좌우 가장자리 픽셀 전체 샘플 → 최빈값(히스토그램)
+  const bgColor = estimateBg(data, W, H);
+
+  // 배경 판별 함수
+  const THR = 30; // 허용 오차
+  function isBg(idx) {
+    if (data[idx + 3] < 10) return true; // 투명
+    return (
+      Math.abs(data[idx]     - bgColor.r) <= THR &&
+      Math.abs(data[idx + 1] - bgColor.g) <= THR &&
+      Math.abs(data[idx + 2] - bgColor.b) <= THR
+    );
+  }
+
+  // Bounding box 계산
+  let top = -1, bottom = -1, left = -1, right = -1;
+
+  // top
+  outer: for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (!isBg((y * W + x) * 4)) { top = y; break outer; }
+
+  // bottom
+  outer: for (let y = H - 1; y >= 0; y--)
+    for (let x = 0; x < W; x++)
+      if (!isBg((y * W + x) * 4)) { bottom = y; break outer; }
+
+  if (top === -1 || bottom === -1) return null;
+
+  // left
+  outer: for (let x = 0; x < W; x++)
+    for (let y = top; y <= bottom; y++)
+      if (!isBg((y * W + x) * 4)) { left = x; break outer; }
+
+  // right
+  outer: for (let x = W - 1; x >= 0; x--)
+    for (let y = top; y <= bottom; y++)
+      if (!isBg((y * W + x) * 4)) { right = x; break outer; }
+
+  if (left === -1 || right === -1) return null;
+
+  // 결과 canvas에 bounding box만 그리기
+  const cw = right - left + 1;
+  const ch = bottom - top + 1;
+  const out = document.createElement('canvas');
+  out.width  = cw;
+  out.height = ch;
+  out.getContext('2d').drawImage(img, left, top, cw, ch, 0, 0, cw, ch);
+
+  return new Promise(res => out.toBlob(res, 'image/png'));
+}
+
+// 가장자리 픽셀 전체를 샘플링해서 배경색 추정
+function estimateBg(data, W, H) {
+  const samples = [];
+
+  for (let x = 0; x < W; x++) {
+    samples.push(getColor(data, x, 0,   W));
+    samples.push(getColor(data, x, H-1, W));
+  }
+  for (let y = 1; y < H - 1; y++) {
+    samples.push(getColor(data, 0,   y, W));
+    samples.push(getColor(data, W-1, y, W));
+  }
+
+  // 투명 픽셀 제외
+  const opaque = samples.filter(c => c.a >= 10);
+  if (!opaque.length) return { r: 255, g: 255, b: 255 };
+
+  // 평균
+  const r = Math.round(opaque.reduce((s, c) => s + c.r, 0) / opaque.length);
+  const g = Math.round(opaque.reduce((s, c) => s + c.g, 0) / opaque.length);
+  const b = Math.round(opaque.reduce((s, c) => s + c.b, 0) / opaque.length);
+  return { r, g, b };
+}
+
+function getColor(data, x, y, W) {
+  const i = (y * W + x) * 4;
+  return { r: data[i], g: data[i+1], b: data[i+2], a: data[i+3] };
+}
+
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
+}
+
+// ZIP
+document.getElementById('btn-zip').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-zip');
+  btn.disabled = true;
+  const zip = new JSZip();
+  saved.forEach(({ blob, name }) => zip.file(name, blob));
+  const z = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(z); a.download = '재단이미지.zip'; a.click();
+  btn.disabled = false;
+});
+
+// 초기화
+document.getElementById('btn-clear').addEventListener('click', () => {
+  queue.length = 0; saved.length = 0;
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('grid').style.display = 'none';
+  drop.style.display = 'flex';
+  document.getElementById('btn-crop').disabled = true;
+  document.getElementById('btn-zip').style.display = 'none';
+  document.getElementById('btn-clear').style.display = 'none';
+});
+</script>
+</body>
+</html>
