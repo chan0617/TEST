@@ -12,7 +12,7 @@
     #topbar {
       position: sticky; top: 0; z-index: 100;
       background: #16213e; border-bottom: 1px solid #0f3460;
-      display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px; flex-wrap: wrap;
     }
     #topbar h1 { font-size: 1rem; font-weight: 700; margin-right: auto; }
 
@@ -28,9 +28,21 @@
     #btn-clear { background: #333; color: #aaa; display: none; }
     input[type=file] { display: none; }
 
+    #api-row {
+      width: 100%; display: flex; align-items: center; gap: 8px;
+      padding: 8px 20px; background: #111827; border-bottom: 1px solid #0f3460;
+      font-size: 0.78rem; color: #666;
+    }
+    #api-row input[type=text] {
+      flex: 1; max-width: 320px;
+      background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px;
+      padding: 5px 10px; color: #eee; font-size: 0.78rem;
+    }
+    #api-row a { color: #16a085; font-size: 0.75rem; }
+
     #drop {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: calc(100vh - 52px); gap: 8px; cursor: pointer;
+      min-height: calc(100vh - 96px); gap: 8px; cursor: pointer;
       border: 2px dashed #0f3460; margin: 20px; border-radius: 12px;
     }
     #drop:hover, #drop.over { border-color: #e94560; }
@@ -43,9 +55,10 @@
     }
     .card { background: #16213e; border-radius: 8px; overflow: hidden; border: 1px solid #0f3460; }
     .card img { width: 100%; height: 150px; object-fit: contain; background: #111827; display: block; }
-    .card p { font-size: 0.7rem; color: #666; padding: 5px 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .card a { font-size: 0.7rem; color: #16a085; padding: 0 8px 6px; display: block; text-decoration: none; }
+    .card p   { font-size: 0.7rem; color: #666; padding: 5px 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .card a   { font-size: 0.7rem; color: #16a085; padding: 0 8px 6px; display: block; text-decoration: none; }
     .card a:hover { text-decoration: underline; }
+    .card .err { font-size: 0.7rem; color: #e94560; padding: 0 8px 6px; }
   </style>
 </head>
 <body>
@@ -58,6 +71,13 @@
   <button id="btn-clear">초기화</button>
   <input type="file" id="file-input" accept="image/*" multiple/>
   <input type="file" id="add-input"  accept="image/*" multiple/>
+</div>
+
+<!-- Remove.bg API 키 (선택) -->
+<div id="api-row">
+  <span>Remove.bg API 키 (선택 — 없으면 픽셀 분석으로 처리)</span>
+  <input type="text" id="api-key" placeholder="없으면 비워두세요"/>
+  <a href="https://www.remove.bg/api" target="_blank">무료 키 발급</a>
 </div>
 
 <div id="drop">
@@ -82,7 +102,7 @@ document.getElementById('btn-add').addEventListener('click', () => document.getE
 
 function addFiles(files) {
   Array.from(files).filter(f => f.type.startsWith('image/')).forEach(file => {
-    const url = URL.createObjectURL(file);
+    const url   = URL.createObjectURL(file);
     const card  = document.createElement('div'); card.className = 'card';
     const thumb = document.createElement('img'); thumb.src = url;
     const label = document.createElement('p');   label.textContent = file.name;
@@ -91,7 +111,7 @@ function addFiles(files) {
     document.getElementById('grid').appendChild(card);
 
     const img = new Image();
-    img.onload = () => queue.push({ img, file, thumb, label, card });
+    img.onload = () => queue.push({ file, img, thumb, label, card });
     img.src = url;
   });
 
@@ -103,102 +123,171 @@ function addFiles(files) {
 
 // 재단하기
 document.getElementById('btn-crop').addEventListener('click', async () => {
-  document.getElementById('btn-crop').disabled = true;
+  const btn    = document.getElementById('btn-crop');
+  const apiKey = document.getElementById('api-key').value.trim();
+  btn.disabled = true;
 
-  for (const { img, file, thumb, label, card } of queue) {
-    const result = await trim(img);
-    if (!result) continue;
+  for (const item of queue) {
+    try {
+      const blob = apiKey
+        ? await removeBgApi(item.file, apiKey)
+        : await pixelAutoCrop(item.img);
 
-    const name = file.name.replace(/\.[^.]+$/, '') + '_재단.png';
-    const url  = URL.createObjectURL(result);
-    saved.push({ blob: result, name });
+      if (!blob) throw new Error('결과 없음');
 
-    thumb.src = url;
-    label.textContent = name;
+      const name = item.file.name.replace(/\.[^.]+$/, '') + '_재단.png';
+      const url  = URL.createObjectURL(blob);
+      saved.push({ blob, name });
 
-    // 저장 링크 (중복 방지)
-    if (!card.querySelector('a')) {
-      const a = document.createElement('a');
-      a.href = url; a.download = name; a.textContent = '저장';
-      card.appendChild(a);
+      item.thumb.src = url;
+      item.label.textContent = name;
+      if (!item.card.querySelector('a')) {
+        const a = document.createElement('a');
+        a.href = url; a.download = name; a.textContent = '저장';
+        item.card.appendChild(a);
+      }
+    } catch (e) {
+      if (!item.card.querySelector('.err')) {
+        const err = document.createElement('div');
+        err.className = 'err';
+        err.textContent = '실패: ' + (e.message || '오류');
+        item.card.appendChild(err);
+      }
     }
   }
 
   if (saved.length) document.getElementById('btn-zip').style.display = 'inline-block';
-  document.getElementById('btn-crop').disabled = false;
+  btn.disabled = false;
 });
 
-// ── 픽셀 분석 여백 제거 ──────────────────────────────────────────
-function trim(img) {
+// ── Remove.bg API ────────────────────────────────────────────────
+async function removeBgApi(file, apiKey) {
+  const form = new FormData();
+  form.append('image_file', file);
+  form.append('size', 'auto');
+
+  const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+    method: 'POST',
+    headers: { 'X-Api-Key': apiKey },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`remove.bg: ${res.status} ${msg}`);
+  }
+
+  // 배경 제거된 PNG → 투명 픽셀 기준으로 crop
+  const blob = await res.blob();
+  const img  = await loadImg(URL.createObjectURL(blob));
+  return pixelAutoCrop(img);
+}
+
+// ── 픽셀 분석 Auto Crop ──────────────────────────────────────────
+// 원본 이미지 naturalWidth × naturalHeight 를 canvas에 그리고
+// getImageData 로 전체 픽셀을 읽어 배경과 다른 픽셀의 bounding box를 계산한다.
+async function pixelAutoCrop(img) {
   const W = img.naturalWidth;
   const H = img.naturalHeight;
 
+  // 원본 해상도 canvas
   const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
+  canvas.width  = W;
+  canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  const d = ctx.getImageData(0, 0, W, H).data;
+  ctx.drawImage(img, 0, 0, W, H);
 
-  function px(x, y) {
-    const i = (y * W + x) * 4;
-    return { r: d[i], g: d[i+1], b: d[i+2], a: d[i+3] };
+  // 원본 픽셀 데이터 전체 읽기
+  const { data } = ctx.getImageData(0, 0, W, H);
+
+  // 배경색 추정: 상하좌우 가장자리 픽셀 전체 샘플 → 최빈값(히스토그램)
+  const bgColor = estimateBg(data, W, H);
+
+  // 배경 판별 함수
+  const THR = 30; // 허용 오차
+  function isBg(idx) {
+    if (data[idx + 3] < 10) return true; // 투명
+    return (
+      Math.abs(data[idx]     - bgColor.r) <= THR &&
+      Math.abs(data[idx + 1] - bgColor.g) <= THR &&
+      Math.abs(data[idx + 2] - bgColor.b) <= THR
+    );
   }
 
-  // 4모서리 픽셀 평균 → 배경색 기준
-  const corners = [px(0,0), px(W-1,0), px(0,H-1), px(W-1,H-1)];
-  const bgR = corners.reduce((s,p) => s + p.r, 0) / 4;
-  const bgG = corners.reduce((s,p) => s + p.g, 0) / 4;
-  const bgB = corners.reduce((s,p) => s + p.b, 0) / 4;
-  const THR = 15;
-
-  function isBg(x, y) {
-    const { r, g, b, a } = px(x, y);
-    if (a < 10) return true; // 투명 픽셀도 배경
-    return Math.abs(r - bgR) <= THR &&
-           Math.abs(g - bgG) <= THR &&
-           Math.abs(b - bgB) <= THR;
-  }
-
+  // Bounding box 계산
   let top = -1, bottom = -1, left = -1, right = -1;
 
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      if (!isBg(x, y)) { top = y; break; }
-    }
-    if (top !== -1) break;
-  }
+  // top
+  outer: for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (!isBg((y * W + x) * 4)) { top = y; break outer; }
 
-  for (let y = H - 1; y >= 0; y--) {
-    for (let x = 0; x < W; x++) {
-      if (!isBg(x, y)) { bottom = y; break; }
-    }
-    if (bottom !== -1) break;
-  }
+  // bottom
+  outer: for (let y = H - 1; y >= 0; y--)
+    for (let x = 0; x < W; x++)
+      if (!isBg((y * W + x) * 4)) { bottom = y; break outer; }
 
   if (top === -1 || bottom === -1) return null;
 
-  for (let x = 0; x < W; x++) {
-    for (let y = top; y <= bottom; y++) {
-      if (!isBg(x, y)) { left = x; break; }
-    }
-    if (left !== -1) break;
-  }
+  // left
+  outer: for (let x = 0; x < W; x++)
+    for (let y = top; y <= bottom; y++)
+      if (!isBg((y * W + x) * 4)) { left = x; break outer; }
 
-  for (let x = W - 1; x >= 0; x--) {
-    for (let y = top; y <= bottom; y++) {
-      if (!isBg(x, y)) { right = x; break; }
-    }
-    if (right !== -1) break;
-  }
+  // right
+  outer: for (let x = W - 1; x >= 0; x--)
+    for (let y = top; y <= bottom; y++)
+      if (!isBg((y * W + x) * 4)) { right = x; break outer; }
 
-  if (left === -1 || right === -1 || right <= left || bottom <= top) return null;
+  if (left === -1 || right === -1) return null;
 
+  // 결과 canvas에 bounding box만 그리기
   const cw = right - left + 1;
   const ch = bottom - top + 1;
   const out = document.createElement('canvas');
-  out.width = cw; out.height = ch;
+  out.width  = cw;
+  out.height = ch;
   out.getContext('2d').drawImage(img, left, top, cw, ch, 0, 0, cw, ch);
+
   return new Promise(res => out.toBlob(res, 'image/png'));
+}
+
+// 가장자리 픽셀 전체를 샘플링해서 배경색 추정
+function estimateBg(data, W, H) {
+  const samples = [];
+
+  for (let x = 0; x < W; x++) {
+    samples.push(getColor(data, x, 0,   W));
+    samples.push(getColor(data, x, H-1, W));
+  }
+  for (let y = 1; y < H - 1; y++) {
+    samples.push(getColor(data, 0,   y, W));
+    samples.push(getColor(data, W-1, y, W));
+  }
+
+  // 투명 픽셀 제외
+  const opaque = samples.filter(c => c.a >= 10);
+  if (!opaque.length) return { r: 255, g: 255, b: 255 };
+
+  // 평균
+  const r = Math.round(opaque.reduce((s, c) => s + c.r, 0) / opaque.length);
+  const g = Math.round(opaque.reduce((s, c) => s + c.g, 0) / opaque.length);
+  const b = Math.round(opaque.reduce((s, c) => s + c.b, 0) / opaque.length);
+  return { r, g, b };
+}
+
+function getColor(data, x, y, W) {
+  const i = (y * W + x) * 4;
+  return { r: data[i], g: data[i+1], b: data[i+2], a: data[i+3] };
+}
+
+function loadImg(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = rej;
+    img.src = src;
+  });
 }
 
 // ZIP
